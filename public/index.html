@@ -97,6 +97,8 @@
   <div class="row info-row">
     <div class="info-item"><strong>Status:</strong> <span id="status">idle</span></div>
     <div class="info-item"><strong>SR:</strong> <span id="sr">—</span></div>
+    <div class="info-item"><strong>Bank A:</strong> <span id="freq0">—</span></div>
+    <div class="info-item"><strong>Bank B:</strong> <span id="freq1">—</span></div>
   </div>
   <div class="row"><strong>Decoded output:</strong></div>
   <div id="out"></div>
@@ -186,9 +188,17 @@ const outEl = document.getElementById('out');
 const srEl = document.getElementById('sr');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+const freqEls = FREQS_SETS.map((_, i) => document.getElementById(`freq${i}`));
 
 function setStatus(s){ statusEl.textContent = s; }
 function print(s){ outEl.textContent += s; }
+function formatFreq(f){
+  const txt = f.toFixed(1);
+  return (txt.endsWith('.0') ? txt.slice(0, -2) : txt) + ' Hz';
+}
+function resetFreqDisplays(){ for (const el of freqEls) if (el) el.textContent = '—'; }
+
+resetFreqDisplays();
 
 // =================== Dual decoder state ===================
 function mkDec() { return {state:'idle', recent:[], frameTrits:[], scores:[]}; }
@@ -315,6 +325,7 @@ startBtn.addEventListener('click', async () => {
   stopBtn.disabled = true;
   try {
     resetAllDecoders();
+    resetFreqDisplays();
     audioCtx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
     srEl.textContent = audioCtx.sampleRate.toFixed(0) + ' Hz';
     // Load worklet
@@ -370,6 +381,7 @@ stopBtn.addEventListener('click', async () => {
     }
   } finally {
     resetAllDecoders();
+    resetFreqDisplays();
     srEl.textContent = '—';
     setStatus('stopped');
     startBtn.disabled = false;
@@ -378,17 +390,25 @@ stopBtn.addEventListener('click', async () => {
 
 // Handle candidates from both banks
 function handleCandidates(results){
+  const activeBanks = new Array(freqEls.length).fill(false);
   // For each active bank candidate, feed its decoder
   for (const r of results) {
     if (!r.active) continue;
+    if (freqEls[r.bank]) {
+      freqEls[r.bank].textContent = formatFreq(FREQS_SETS[r.bank][r.idx]);
+      activeBanks[r.bank] = true;
+    }
     const out = feedOne(DEC[r.bank], r.idx, r.score);
     if (out) {
       // Print as soon as a bank returns a CRC-valid decoded frame
       if (out.ok && out.okCRC && out.text) {
         print(out.text);
-        setStatus(`frame OK (bank ${results.indexOf(r)})`);
+        setStatus(`frame OK (bank ${r.bank})`);
       }
     }
+  }
+  for (let i = 0; i < activeBanks.length; i++) {
+    if (!activeBanks[i] && freqEls[i]) freqEls[i].textContent = '—';
   }
 }
 </script>
