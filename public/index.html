@@ -90,6 +90,7 @@
   <div class="row controls">
     <button id="startBtn">Start 🎙️</button>
     <button id="stopBtn" disabled>Stop 🚫</button>
+    <button id="sampleBtn">Play Sample 🔊</button>
   </div>
   <div class="row info-row">
     <div class="info-item"><strong>Status:</strong> <span id="status">idle</span></div>
@@ -106,6 +107,7 @@
 const TONE_MS = 62.5;    // 4 ticks @ 64 Hz
 const REST_MS = 62.5;    // 4 ticks @ 64 Hz (set to 15.625 for 1-tick gap, or 0 for max speed)
 const ENERGY_FLOOR = 1e-7; // raise a bit if your room is noisy
+const SAMPLE_WAV_URL = 'sample.wav';
 
 // Two frequency banks (Hz) — adjust as needed.
 // Bank A matches your spec (index 0..3): 0→F7, 1→A7, 2→D8, 3→G6
@@ -185,6 +187,7 @@ const outEl = document.getElementById('out');
 const srEl = document.getElementById('sr');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+const sampleBtn = document.getElementById('sampleBtn');
 const freqEls = FREQS_SETS.map((_, i) => document.getElementById(`freq${i}`));
 
 function setStatus(s){ statusEl.textContent = s; }
@@ -202,6 +205,64 @@ function mkDec() { return {state:'idle', recent:[], frameTrits:[], scores:[]}; }
 const DEC = [ mkDec(), mkDec() ];
 function resetDec(d){ d.state='idle'; d.recent.length=0; d.frameTrits.length=0; d.scores.length=0; }
 function resetAllDecoders(){ for (const d of DEC) resetDec(d); }
+
+async function cleanup(nextStatus){
+  if (bufferSrc) {
+    bufferSrc.onended = null;
+    try { bufferSrc.stop(); } catch (_) {}
+    try { bufferSrc.disconnect(); } catch (_) {}
+    bufferSrc = null;
+  }
+  if (workletNode) {
+    workletNode.port.onmessage = null;
+    try { workletNode.disconnect(); } catch (_) {}
+    workletNode = null;
+  }
+  if (mediaSrc) {
+    try { mediaSrc.disconnect(); } catch (_) {}
+    mediaSrc = null;
+  }
+  if (mediaStream) {
+    for (const track of mediaStream.getTracks()) track.stop();
+    mediaStream = null;
+  }
+  if (audioCtx) {
+    try { await audioCtx.close(); } catch (_) {}
+    audioCtx = null;
+  }
+  srEl.textContent = '—';
+  resetAllDecoders();
+  resetFreqDisplays();
+  suppressReadyStatus = false;
+  if (typeof nextStatus === 'string') setStatus(nextStatus);
+}
+
+async function initProcessingChain(){
+  resetAllDecoders();
+  resetFreqDisplays();
+  setStatus('initializing audio…');
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
+  srEl.textContent = audioCtx.sampleRate.toFixed(0) + ' Hz';
+  const blob = new Blob([workletSource], {type:'application/javascript'});
+  const url = URL.createObjectURL(blob);
+  try {
+    await audioCtx.audioWorklet.addModule(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  workletNode = new AudioWorkletNode(audioCtx, 'mb-fesk', {numberOfInputs:1, numberOfOutputs:0});
+  workletNode.port.onmessage = (e)=>{
+    const m = e.data;
+    if (m.t==='ready') {
+      if (!suppressReadyStatus) setStatus('ready');
+    }
+    else if (m.t==='candidates') handleCandidates(m.results);
+  };
+  const toneSamples = Math.max(32, Math.round(audioCtx.sampleRate * (TONE_MS/1000)));
+  const restSamples = Math.max(0, Math.round(audioCtx.sampleRate * (REST_MS/1000)));
+  workletNode.port.postMessage({freqSets: FREQS_SETS, toneSamples, restSamples});
+  return workletNode;
+}
 
 function feedOne(dec, symIdx, score) {
   dec.recent.push(symIdx);
@@ -316,42 +377,29 @@ let audioCtx = null;
 let mediaStream = null;
 let mediaSrc = null;
 let workletNode = null;
+let bufferSrc = null;
+let suppressReadyStatus = false;
 
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
   stopBtn.disabled = true;
+  sampleBtn.disabled = true;
   try {
-    resetAllDecoders();
-    resetFreqDisplays();
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
-    srEl.textContent = audioCtx.sampleRate.toFixed(0) + ' Hz';
-    // Load worklet
-    const blob = new Blob([workletSource], {type:'application/javascript'});
-    const url = URL.createObjectURL(blob);
-    await audioCtx.audioWorklet.addModule(url);
-    // Mic (DSP off)
+    await cleanup(null);
+    await initProcessingChain();
+    setStatus('requesting microphone…');
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false, channelCount:1 }
     });
     mediaSrc = audioCtx.createMediaStreamSource(mediaStream);
-    // Node
-    workletNode = new AudioWorkletNode(audioCtx, 'mb-fesk', {numberOfInputs:1, numberOfOutputs:0});
-    workletNode.port.onmessage = (e)=>{
-      const m = e.data;
-      if (m.t==='ready') setStatus('ready');
-      else if (m.t==='candidates') handleCandidates(m.results);
-    };
-    // Init params
-    const toneSamples = Math.max(32, Math.round(audioCtx.sampleRate * (TONE_MS/1000)));
-    const restSamples = Math.max(0, Math.round(audioCtx.sampleRate * (REST_MS/1000)));
-    workletNode.port.postMessage({freqSets: FREQS_SETS, toneSamples, restSamples});
-    // Connect
     mediaSrc.connect(workletNode);
     setStatus('listening… wait for 333 start marker');
     stopBtn.disabled = false;
   } catch (err) {
     setStatus('error: ' + (err && err.message || err));
+    await cleanup(null);
     startBtn.disabled = false;
+    sampleBtn.disabled = false;
     stopBtn.disabled = true;
   }
 });
@@ -359,29 +407,67 @@ startBtn.addEventListener('click', async () => {
 stopBtn.addEventListener('click', async () => {
   stopBtn.disabled = true;
   try {
-    if (workletNode) {
-      workletNode.port.onmessage = null;
-      try { workletNode.disconnect(); } catch (_) {}
-      workletNode = null;
-    }
-    if (mediaSrc) {
-      try { mediaSrc.disconnect(); } catch (_) {}
-      mediaSrc = null;
-    }
-    if (mediaStream) {
-      for (const track of mediaStream.getTracks()) track.stop();
-      mediaStream = null;
-    }
-    if (audioCtx) {
-      await audioCtx.close();
-      audioCtx = null;
-    }
+    await cleanup('stopped');
   } finally {
-    resetAllDecoders();
-    resetFreqDisplays();
-    srEl.textContent = '—';
-    setStatus('stopped');
     startBtn.disabled = false;
+    sampleBtn.disabled = false;
+  }
+});
+
+sampleBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  sampleBtn.disabled = true;
+  stopBtn.disabled = true;
+  try {
+    await cleanup(null);
+    suppressReadyStatus = true;
+    await initProcessingChain();
+    setStatus('loading WAV…');
+    const response = await fetch(SAMPLE_WAV_URL);
+    if (!response.ok) throw new Error(`fetch failed (${response.status})`);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await new Promise((resolve, reject) => {
+      audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
+    });
+    if (!audioBuffer || audioBuffer.numberOfChannels === 0) {
+      throw new Error('empty or unsupported WAV payload');
+    }
+    let playbackBuffer = audioBuffer;
+    if (audioBuffer.numberOfChannels > 1) {
+      const length = audioBuffer.length;
+      const mono = audioCtx.createBuffer(1, length, audioBuffer.sampleRate);
+      const out = mono.getChannelData(0);
+      for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+        const data = audioBuffer.getChannelData(ch);
+        for (let i = 0; i < length; i++) out[i] += data[i];
+      }
+      for (let i = 0; i < out.length; i++) out[i] /= audioBuffer.numberOfChannels;
+      playbackBuffer = mono;
+    }
+    bufferSrc = audioCtx.createBufferSource();
+    bufferSrc.buffer = playbackBuffer;
+    bufferSrc.connect(workletNode);
+    bufferSrc.start();
+    bufferSrc.onended = async () => {
+      const finished = bufferSrc;
+      if (finished) {
+        finished.onended = null;
+        try { finished.disconnect(); } catch (_) {}
+      }
+      bufferSrc = null;
+      stopBtn.disabled = true;
+      await cleanup('sample finished');
+      startBtn.disabled = false;
+      sampleBtn.disabled = false;
+    };
+    setStatus('playing sample…');
+    stopBtn.disabled = false;
+  } catch (err) {
+    setStatus('error: ' + (err && err.message || err));
+    await cleanup(null);
+    startBtn.disabled = false;
+    sampleBtn.disabled = false;
+    stopBtn.disabled = true;
   }
 });
 
