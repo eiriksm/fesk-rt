@@ -14,6 +14,7 @@
 <h1>FESK Dual-Bank Real-Time Decoder</h1>
 <div class="row">
   <button id="startBtn">Start mic & decode</button>
+  <button id="stopBtn" disabled>Stop</button>
 </div>
 <div class="row muted">
   Tone 4 ticks (62.5 ms) + Rest 4 ticks (62.5 ms) — total 125 ms/symbol. Worklet runs Goertzel on two 4-tone banks per symbol.
@@ -108,6 +109,7 @@ const statusEl = document.getElementById('status');
 const outEl = document.getElementById('out');
 const srEl = document.getElementById('sr');
 const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
 
 function setStatus(s){ statusEl.textContent = s; }
 function print(s){ outEl.textContent += s; }
@@ -116,6 +118,7 @@ function print(s){ outEl.textContent += s; }
 function mkDec() { return {state:'idle', recent:[], frameTrits:[], scores:[]}; }
 const DEC = [ mkDec(), mkDec() ];
 function resetDec(d){ d.state='idle'; d.recent.length=0; d.frameTrits.length=0; d.scores.length=0; }
+function resetAllDecoders(){ for (const d of DEC) resetDec(d); }
 
 function feedOne(dec, symIdx, score) {
   dec.recent.push(symIdx);
@@ -226,36 +229,73 @@ registerProcessor('mb-fesk', MultiBankFESK);
 `;
 
 // =================== Boot & wire-up ===================
+let audioCtx = null;
+let mediaStream = null;
+let mediaSrc = null;
+let workletNode = null;
+
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
+  stopBtn.disabled = true;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
-    srEl.textContent = ctx.sampleRate.toFixed(0) + ' Hz';
+    resetAllDecoders();
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
+    srEl.textContent = audioCtx.sampleRate.toFixed(0) + ' Hz';
     // Load worklet
     const blob = new Blob([workletSource], {type:'application/javascript'});
     const url = URL.createObjectURL(blob);
-    await ctx.audioWorklet.addModule(url);
+    await audioCtx.audioWorklet.addModule(url);
     // Mic (DSP off)
-    const stream = await navigator.mediaDevices.getUserMedia({
+    mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false, channelCount:1 }
     });
-    const src = ctx.createMediaStreamSource(stream);
+    mediaSrc = audioCtx.createMediaStreamSource(mediaStream);
     // Node
-    const node = new AudioWorkletNode(ctx, 'mb-fesk', {numberOfInputs:1, numberOfOutputs:0});
-    node.port.onmessage = (e)=>{
+    workletNode = new AudioWorkletNode(audioCtx, 'mb-fesk', {numberOfInputs:1, numberOfOutputs:0});
+    workletNode.port.onmessage = (e)=>{
       const m = e.data;
       if (m.t==='ready') setStatus('ready');
       else if (m.t==='candidates') handleCandidates(m.results);
     };
     // Init params
-    const toneSamples = Math.max(32, Math.round(ctx.sampleRate * (TONE_MS/1000)));
-    const restSamples = Math.max(0, Math.round(ctx.sampleRate * (REST_MS/1000)));
-    node.port.postMessage({freqSets: FREQS_SETS, toneSamples, restSamples});
+    const toneSamples = Math.max(32, Math.round(audioCtx.sampleRate * (TONE_MS/1000)));
+    const restSamples = Math.max(0, Math.round(audioCtx.sampleRate * (REST_MS/1000)));
+    workletNode.port.postMessage({freqSets: FREQS_SETS, toneSamples, restSamples});
     // Connect
-    src.connect(node);
+    mediaSrc.connect(workletNode);
     setStatus('listening… wait for 333 start marker');
+    stopBtn.disabled = false;
   } catch (err) {
     setStatus('error: ' + (err && err.message || err));
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  }
+});
+
+stopBtn.addEventListener('click', async () => {
+  stopBtn.disabled = true;
+  try {
+    if (workletNode) {
+      workletNode.port.onmessage = null;
+      try { workletNode.disconnect(); } catch (_) {}
+      workletNode = null;
+    }
+    if (mediaSrc) {
+      try { mediaSrc.disconnect(); } catch (_) {}
+      mediaSrc = null;
+    }
+    if (mediaStream) {
+      for (const track of mediaStream.getTracks()) track.stop();
+      mediaStream = null;
+    }
+    if (audioCtx) {
+      await audioCtx.close();
+      audioCtx = null;
+    }
+  } finally {
+    resetAllDecoders();
+    srEl.textContent = '—';
+    setStatus('stopped');
     startBtn.disabled = false;
   }
 });
