@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>FESK Dual-Bank Real-Time Decoder</title>
+<title>FESK Real-Time Decoder</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   body {
@@ -86,13 +86,10 @@
 </style>
 
 <div class="app">
-  <h1>FESK Dual-Bank Real-Time Decoder</h1>
+  <h1>FESK Real-Time Decoder</h1>
   <div class="row controls">
-    <button id="startBtn">Start mic & decode</button>
-    <button id="stopBtn" disabled>Stop</button>
-  </div>
-  <div class="row muted">
-    Tone 4 ticks (62.5 ms) + Rest 4 ticks (62.5 ms) — total 125 ms/symbol. Worklet runs Goertzel on two 4-tone banks per symbol.
+    <button id="startBtn">Start 🎙️</button>
+    <button id="stopBtn" disabled>Stop 🚫</button>
   </div>
   <div class="row info-row">
     <div class="info-item"><strong>Status:</strong> <span id="status">idle</span></div>
