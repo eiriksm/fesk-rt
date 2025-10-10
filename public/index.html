@@ -1,0 +1,278 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>FESK Dual-Bank Real-Time Decoder</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 20px; }
+  button { padding: .55rem 1rem; border: 1px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; }
+  #out { white-space: pre-wrap; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+         border: 1px solid #ddd; border-radius: 8px; padding: 10px; min-height: 6rem; }
+  .row { margin: .75rem 0; }
+  .muted { color: #666; font-size: 12px; }
+  .col { display: inline-block; margin-right: 1rem; }
+</style>
+
+<h1>FESK Dual-Bank Real-Time Decoder</h1>
+<div class="row">
+  <button id="startBtn">Start mic & decode</button>
+</div>
+<div class="row muted">
+  Tone 4 ticks (62.5 ms) + Rest 4 ticks (62.5 ms) — total 125 ms/symbol. Worklet runs Goertzel on two 4-tone banks per symbol.
+</div>
+<div class="row">
+  <div class="col"><strong>Status:</strong> <span id="status">idle</span></div>
+  <div class="col"><strong>SR:</strong> <span id="sr">—</span></div>
+</div>
+<div class="row"><strong>Decoded output:</strong></div>
+<div id="out"></div>
+
+<script type="module">
+// =================== CONFIG ===================
+const TONE_MS = 62.5;    // 4 ticks @ 64 Hz
+const REST_MS = 62.5;    // 4 ticks @ 64 Hz (set to 15.625 for 1-tick gap, or 0 for max speed)
+const ENERGY_FLOOR = 1e-7; // raise a bit if your room is noisy
+
+// Two frequency banks (Hz) — adjust as needed.
+// Bank A matches your spec (index 0..3): 0→F7, 1→A7, 2→D8, 3→G6
+const FREQS_SETS = [
+  [2793.83, 3520.00, 4698.63, 1567.98], // Bank A (spec)
+  [2700.00, 3400.00, 4600.00, 1600.00], // Bank B (alt/tolerant)
+];
+// Framing marker
+const FRAME_MARK = "333";
+
+// =================== SYMBOL TABLE (prefix-free) ===================
+// Letters (2-symbol short)
+const MAP = new Map([
+  ["00","a"],["01","b"],["02","c"],["03","d"],
+  ["10","e"],["11","f"],["12","g"],["13","h"],
+  ["20","i"],["21","j"],["22","k"],["23","l"],
+
+  // m..p
+  ["300","m"],["301","n"],["302","o"],["303","p"],
+
+  // q split to 3100, r s t unchanged
+  ["3100","q"],["311","r"],["312","s"],["313","t"],
+
+  // u split to 3200, v w x unchanged
+  ["3200","u"],["321","v"],["322","w"],["323","x"],
+
+  // y split to 3300
+  ["3300","y"],
+
+  // z and punctuation
+  ["3310","z"],["3311"," "],["3312",","],["3313",":"],
+
+  // digits
+  ["332","0"],
+  ["3301","1"],["3302","2"],["3303","3"],
+  ["3201","4"],["3202","5"],["3203","6"],
+  ["3101","7"],["3102","8"],["3103","9"],
+]);
+
+// Build trie for variable-length decoding
+function buildTrie(map) {
+  const root = {};
+  for (const [code, ch] of map.entries()) {
+    let n = root;
+    for (const d of code) { n[d] = n[d] || {}; n = n[d]; }
+    n.$ = ch;
+  }
+  return root;
+}
+const TRIE = buildTrie(MAP);
+
+// CRC-5 over payload symbols (trits 0..3): additive mod 32, LE base-4 to 3 trits
+function crcSymbols(trits) {
+  let crc = 0;
+  for (const s of trits) crc = (crc + s) & 31;
+  const d0 = crc & 3, d1 = (crc >> 2) & 3, d2 = (crc >> 4) & 3;
+  return [d0, d1, d2];
+}
+
+// Decode payload trits via trie
+function decodePayloadTrits(trits) {
+  const out = [];
+  let node = TRIE;
+  for (let i = 0; i < trits.length; i++) {
+    const d = String(trits[i]);
+    if (!node[d]) return { ok:false, text:null, err:`bad code at index ${i}` };
+    node = node[d];
+    if (node.$) { out.push(node.$); node = TRIE; }
+  }
+  if (node !== TRIE) return { ok:false, text:null, err:"truncated code at end" };
+  return { ok:true, text: out.join("") };
+}
+
+// =================== UI helpers ===================
+const statusEl = document.getElementById('status');
+const outEl = document.getElementById('out');
+const srEl = document.getElementById('sr');
+const startBtn = document.getElementById('startBtn');
+
+function setStatus(s){ statusEl.textContent = s; }
+function print(s){ outEl.textContent += s; }
+
+// =================== Dual decoder state ===================
+function mkDec() { return {state:'idle', recent:[], frameTrits:[], scores:[]}; }
+const DEC = [ mkDec(), mkDec() ];
+function resetDec(d){ d.state='idle'; d.recent.length=0; d.frameTrits.length=0; d.scores.length=0; }
+
+function feedOne(dec, symIdx, score) {
+  dec.recent.push(symIdx);
+  if (dec.recent.length > 3) dec.recent.shift();
+
+  if (dec.state === 'idle') {
+    if (dec.recent.length === 3 && dec.recent[0]===3 && dec.recent[1]===3 && dec.recent[2]===3) {
+      dec.state = 'in';
+      dec.frameTrits = [];
+      dec.scores = [];
+      dec.recent = [];
+    }
+    return null;
+  }
+
+  if (dec.state === 'in') {
+    if (dec.recent.length === 3 && dec.recent[0]===3 && dec.recent[1]===3 && dec.recent[2]===3) {
+      // finalize frame
+      if (dec.frameTrits.length < 3) { const r={ok:false, okCRC:false, why:'short'}; resetDec(dec); return r; }
+      const recvCRC = dec.frameTrits.slice(-3);
+      const payload = dec.frameTrits.slice(0, -3);
+      const wantCRC = crcSymbols(payload);
+      const okCRC = (recvCRC[0]===wantCRC[0] && recvCRC[1]===wantCRC[1] && recvCRC[2]===wantCRC[2]);
+      let ok=false, text=null;
+      if (okCRC) {
+        const res = decodePayloadTrits(payload);
+        ok = res.ok; text = res.text;
+      }
+      const avgScore = dec.scores.length ? dec.scores.reduce((a,b)=>a+b,0)/dec.scores.length : 0;
+      const result = {ok, okCRC, text, avgScore};
+      resetDec(dec);
+      return result;
+    } else {
+      dec.frameTrits.push(symIdx);
+      dec.scores.push(score ?? 0);
+    }
+  }
+  return null;
+}
+
+// =================== Worklet (multi-bank) ===================
+const workletSource = `
+class MultiBankFESK extends AudioWorkletProcessor {
+  constructor(){
+    super();
+    this.ready=false; this.buf=[];
+    this.Nsym=0; this.Ngap=0;
+    this.banks=[]; // [{coeffs: Float32Array(4)}]
+    this.energyFloor = ${ENERGY_FLOOR};
+    this.port.onmessage = e=>{
+      const {freqSets, toneSamples, restSamples} = e.data;
+      this.Nsym = Math.max(32, toneSamples|0);
+      this.Ngap = Math.max(0,  restSamples|0);
+      this.banks = freqSets.map(freqs=>{
+        const coeffs = new Float32Array(4);
+        for (let i=0;i<4;i++){
+          const k = Math.round(this.Nsym * freqs[i] / sampleRate);
+          const omega = 2*Math.PI*k / this.Nsym;
+          coeffs[i] = 2*Math.cos(omega);
+        }
+        return {coeffs};
+      });
+      this.ready=true; this.port.postMessage({t:'ready', sr: sampleRate});
+    };
+  }
+  _goertzel(block, coeffs){
+    const N = block.length; const out = new Float32Array(4);
+    let s0,s1,s2;
+    for (let i=0;i<4;i++){
+      const c=coeffs[i]; s0=0; s1=0; s2=0;
+      for (let n=0;n<N;n++){ s0 = block[n] + c*s1 - s2; s2=s1; s1=s0; }
+      out[i] = s1*s1 + s2*s2 - c*s1*s2;
+    }
+    return out;
+  }
+  process(inputs){
+    if (!this.ready) return true;
+    const x = inputs[0]?.[0]; if (!x) return true;
+    for (let i=0;i<x.length;i++) this.buf.push(x[i]);
+    while (this.buf.length >= this.Nsym){
+      const block = this.buf.splice(0, this.Nsym);
+      // small edge ramps (≈5ms)
+      const w = Math.min(Math.floor(0.005*sampleRate), block.length>>2);
+      if (w>0){
+        for (let i=0;i<w;i++){ const r=0.5-0.5*Math.cos(Math.PI*i/(w-1)); block[i]*=r; block[block.length-1-i]*=r; }
+      }
+      const results = [];
+      for (let b=0; b<this.banks.length; b++){
+        const P = this._goertzel(block, this.banks[b].coeffs);
+        const energy = P[0]+P[1]+P[2]+P[3];
+        if (energy <= this.energyFloor){ results.push({bank:b, active:false}); continue; }
+        // winner + margin score
+        let iMax=0, vMax=P[0], i2=1, v2=P[1];
+        for (let i=1;i<4;i++){
+          if (P[i]>vMax){ i2=iMax; v2=vMax; iMax=i; vMax=P[i]; }
+          else if (P[i]>v2){ i2=i; v2=P[i]; }
+        }
+        const score = (vMax - v2) / Math.max(1e-12, energy);
+        results.push({bank:b, active:true, idx:iMax, score});
+      }
+      this.port.postMessage({t:'candidates', results});
+      if (this.Ngap>0 && this.buf.length>=this.Ngap) this.buf.splice(0, this.Ngap);
+    }
+    return true;
+  }
+}
+registerProcessor('mb-fesk', MultiBankFESK);
+`;
+
+// =================== Boot & wire-up ===================
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
+    srEl.textContent = ctx.sampleRate.toFixed(0) + ' Hz';
+    // Load worklet
+    const blob = new Blob([workletSource], {type:'application/javascript'});
+    const url = URL.createObjectURL(blob);
+    await ctx.audioWorklet.addModule(url);
+    // Mic (DSP off)
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false, channelCount:1 }
+    });
+    const src = ctx.createMediaStreamSource(stream);
+    // Node
+    const node = new AudioWorkletNode(ctx, 'mb-fesk', {numberOfInputs:1, numberOfOutputs:0});
+    node.port.onmessage = (e)=>{
+      const m = e.data;
+      if (m.t==='ready') setStatus('ready');
+      else if (m.t==='candidates') handleCandidates(m.results);
+    };
+    // Init params
+    const toneSamples = Math.max(32, Math.round(ctx.sampleRate * (TONE_MS/1000)));
+    const restSamples = Math.max(0, Math.round(ctx.sampleRate * (REST_MS/1000)));
+    node.port.postMessage({freqSets: FREQS_SETS, toneSamples, restSamples});
+    // Connect
+    src.connect(node);
+    setStatus('listening… wait for 333 start marker');
+  } catch (err) {
+    setStatus('error: ' + (err && err.message || err));
+    startBtn.disabled = false;
+  }
+});
+
+// Handle candidates from both banks
+function handleCandidates(results){
+  // For each active bank candidate, feed its decoder
+  for (const r of results) {
+    if (!r.active) continue;
+    const out = feedOne(DEC[r.bank], r.idx, r.score);
+    if (out) {
+      // Print as soon as a bank returns a CRC-valid decoded frame
+      if (out.ok && out.okCRC && out.text) {
+        print(out.text);
+        setStatus(`frame OK (bank ${results.indexOf(r)})`);
+      }
+    }
+  }
+}
+</script>
