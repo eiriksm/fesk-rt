@@ -1,0 +1,12 @@
+{
+  "name": "fesk-rt",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "cy:open": "cypress open",
+    "cy:run": "cypress run"
+  },
+  "devDependencies": {
+    "cypress": "^13.6.4"
+  }
+}
