@@ -5,7 +5,7 @@
   "scripts": {
     "cy:open": "cypress open",
     "cy:run": "cypress run",
-    "start": "npx serve public --yes"
+    "start": "npx -y serve public"
   },
   "devDependencies": {
     "cypress": "^13.6.4"
