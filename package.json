@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "cy:open": "cypress open",
-    "cy:run": "cypress run"
+    "cy:run": "cypress run",
+    "start": "npx serve public --yes"
   },
   "devDependencies": {
     "cypress": "^13.6.4"
