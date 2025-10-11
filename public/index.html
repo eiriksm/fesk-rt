@@ -105,9 +105,14 @@
 
 <script type="module">
 // =================== CONFIG ===================
-const TONE_MS = 62.5;    // 4 ticks @ 64 Hz
-const REST_MS = 62.5;    // 4 ticks @ 64 Hz (set to 15.625 for 1-tick gap, or 0 for max speed)
 const ENERGY_FLOOR = 1e-7; // raise a bit if your room is noisy
+// Streaming tone detector parameters
+const ENERGY_ON = 1.5e-5;
+const ENERGY_OFF = 4e-6;
+const MIN_TONE_MS = 30;
+const MIN_GAP_MS = 20;
+const IGNORE_HEAD_MS = 4;
+const ENERGY_ENVELOPE_MS = 8;
 const SAMPLE_WAV_URL = 'sample.wav';
 
 // Two frequency banks (Hz) — adjust as needed.
@@ -439,9 +444,16 @@ async function initProcessingChain(){
     }
     else if (m.t==='candidates') handleCandidates(m.results);
   };
-  const toneSamples = Math.max(32, Math.round(audioCtx.sampleRate * (TONE_MS/1000)));
-  const restSamples = Math.max(0, Math.round(audioCtx.sampleRate * (REST_MS/1000)));
-  workletNode.port.postMessage({freqSets: FREQS_SETS, toneSamples, restSamples, energyFloor: ENERGY_FLOOR});
+  workletNode.port.postMessage({
+    freqSets: FREQS_SETS,
+    energyFloor: ENERGY_FLOOR,
+    energyOn: ENERGY_ON,
+    energyOff: ENERGY_OFF,
+    minToneMs: MIN_TONE_MS,
+    minGapMs: MIN_GAP_MS,
+    ignoreHeadMs: IGNORE_HEAD_MS,
+    envelopeMs: ENERGY_ENVELOPE_MS,
+  });
   return workletNode;
 }
 
