@@ -91,6 +91,7 @@
     <button id="startBtn">Start 🎙️</button>
     <button id="stopBtn" disabled>Stop 🚫</button>
     <button id="sampleBtn">Play Sample 🔊</button>
+    <button id="downloadBtn" disabled>Download WAV ⬇️</button>
   </div>
   <div class="row info-row">
     <div class="info-item"><strong>Status:</strong> <span id="status">idle</span></div>
@@ -188,7 +189,25 @@ const srEl = document.getElementById('sr');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const sampleBtn = document.getElementById('sampleBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const DOWNLOAD_LABEL = 'Download WAV ⬇️';
 const freqEls = FREQS_SETS.map((_, i) => document.getElementById(`freq${i}`));
+
+let recorder = null;
+let recordedChunks = [];
+let recordedWavBlob = null;
+
+function clearRecording(){
+  recordedWavBlob = null;
+  recordedChunks = [];
+  downloadBtn.disabled = true;
+  downloadBtn.textContent = DOWNLOAD_LABEL;
+}
+
+if (typeof MediaRecorder === 'undefined') {
+  downloadBtn.disabled = true;
+  downloadBtn.title = 'Recording download requires MediaRecorder support.';
+}
 
 function setStatus(s){ statusEl.textContent = s; }
 function print(s){ outEl.textContent += s; }
@@ -200,13 +219,180 @@ function resetFreqDisplays(){ for (const el of freqEls) if (el) el.textContent =
 
 resetFreqDisplays();
 
+function getRecorderMimeType(){
+  if (typeof MediaRecorder === 'undefined') return null;
+  const preferred = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus'
+  ];
+  for (const type of preferred) {
+    if (MediaRecorder.isTypeSupported?.(type)) return type;
+  }
+  return null;
+}
+
+function setupRecorder(stream){
+  if (typeof MediaRecorder === 'undefined') return;
+  const type = getRecorderMimeType();
+  const options = type ? {mimeType:type} : undefined;
+  try {
+    recorder = new MediaRecorder(stream, options);
+  } catch (err) {
+    console.warn('MediaRecorder unavailable', err);
+    recorder = null;
+    return;
+  }
+  recordedChunks = [];
+  recorder.addEventListener('dataavailable', e => {
+    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+  });
+  try {
+    recorder.start();
+  } catch (err) {
+    console.warn('MediaRecorder start failed', err);
+    recorder = null;
+  }
+}
+
+async function stopRecording({finalize=true}={}){
+  if (!recorder) {
+    if (!finalize) recordedChunks = [];
+    return {hadError:false};
+  }
+  if (recorder.state === 'inactive') {
+    recorder = null;
+    if (!finalize) recordedChunks = [];
+    return {hadError:false};
+  }
+  const rec = recorder;
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = (hadError) => {
+      if (settled) return;
+      settled = true;
+      recorder = null;
+      recordedChunks = [];
+      resolve({hadError});
+    };
+    rec.addEventListener('stop', async () => {
+      let hadError = false;
+      try {
+        if (finalize && recordedChunks.length) {
+          const blob = new Blob(recordedChunks, {type: rec.mimeType || 'audio/webm'});
+          await prepareDownload(blob);
+        } else if (finalize) {
+          clearRecording();
+        } else {
+          recordedChunks = [];
+        }
+      } catch (err) {
+        console.error('Failed to prepare recording', err);
+        clearRecording();
+        hadError = true;
+      } finally {
+        finish(hadError);
+      }
+    }, {once:true});
+    try {
+      rec.stop();
+    } catch (err) {
+      console.warn('MediaRecorder stop failed', err);
+      if (finalize) clearRecording(); else recordedChunks = [];
+      finish(true);
+    }
+  });
+}
+
+async function prepareDownload(blob){
+  if (!blob || blob.size === 0) {
+    clearRecording();
+    return;
+  }
+  downloadBtn.disabled = true;
+  downloadBtn.textContent = 'Preparing WAV…';
+  try {
+    const wavBlob = await convertBlobToWav(blob);
+    recordedWavBlob = wavBlob;
+    downloadBtn.disabled = false;
+  } catch (err) {
+    console.error('Unable to convert recording', err);
+    clearRecording();
+    setStatus('error preparing WAV');
+  } finally {
+    downloadBtn.textContent = DOWNLOAD_LABEL;
+  }
+}
+
+async function convertBlobToWav(blob){
+  const arrayBuffer = await blob.arrayBuffer();
+  const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    const audioBuffer = await new Promise((resolve, reject) => {
+      tmpCtx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+    });
+    const wavBuffer = audioBufferToWav(audioBuffer);
+    return new Blob([wavBuffer], {type:'audio/wav'});
+  } finally {
+    try { await tmpCtx.close(); } catch (_) {}
+  }
+}
+
+function audioBufferToWav(buffer){
+  const numChannels = buffer.numberOfChannels || 1;
+  const sampleRate = buffer.sampleRate;
+  const numFrames = buffer.length;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numFrames * blockAlign;
+  const arrayBuffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(arrayBuffer);
+  let offset = 0;
+
+  function writeString(str){
+    for (let i = 0; i < str.length; i++) view.setUint8(offset++, str.charCodeAt(i));
+  }
+
+  writeString('RIFF');
+  view.setUint32(offset, 36 + dataSize, true); offset += 4;
+  writeString('WAVE');
+  writeString('fmt ');
+  view.setUint32(offset, 16, true); offset += 4;
+  view.setUint16(offset, 1, true); offset += 2;
+  view.setUint16(offset, numChannels, true); offset += 2;
+  view.setUint32(offset, sampleRate, true); offset += 4;
+  view.setUint32(offset, byteRate, true); offset += 4;
+  view.setUint16(offset, blockAlign, true); offset += 2;
+  view.setUint16(offset, bytesPerSample * 8, true); offset += 2;
+  writeString('data');
+  view.setUint32(offset, dataSize, true); offset += 4;
+
+  const channels = [];
+  for (let ch = 0; ch < numChannels; ch++) channels.push(buffer.getChannelData(ch));
+  for (let i = 0; i < numFrames; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      let sample = channels[ch][i] || 0;
+      sample = Math.max(-1, Math.min(1, sample));
+      const intSample = sample < 0 ? Math.round(sample * 0x8000) : Math.round(sample * 0x7FFF);
+      view.setInt16(offset, intSample, true);
+      offset += 2;
+    }
+  }
+  return arrayBuffer;
+}
+
 // =================== Dual decoder state ===================
 function mkDec() { return {state:'idle', recent:[], frameTrits:[], scores:[]}; }
 const DEC = [ mkDec(), mkDec() ];
 function resetDec(d){ d.state='idle'; d.recent.length=0; d.frameTrits.length=0; d.scores.length=0; }
 function resetAllDecoders(){ for (const d of DEC) resetDec(d); }
 
-async function cleanup(nextStatus){
+async function cleanup(nextStatus, opts={}){
+  const {skipRecorderStop = false} = opts;
+  if (!skipRecorderStop) {
+    await stopRecording({finalize:false});
+  }
   if (bufferSrc) {
     bufferSrc.onended = null;
     try { bufferSrc.stop(); } catch (_) {}
@@ -393,6 +579,8 @@ startBtn.addEventListener('click', async () => {
     });
     mediaSrc = audioCtx.createMediaStreamSource(mediaStream);
     mediaSrc.connect(workletNode);
+    clearRecording();
+    setupRecorder(mediaStream);
     setStatus('listening… wait for 333 start marker');
     stopBtn.disabled = false;
   } catch (err) {
@@ -407,7 +595,8 @@ startBtn.addEventListener('click', async () => {
 stopBtn.addEventListener('click', async () => {
   stopBtn.disabled = true;
   try {
-    await cleanup('stopped');
+    const result = await stopRecording({finalize:true});
+    await cleanup(result && result.hadError ? undefined : 'stopped', {skipRecorderStop:true});
   } finally {
     startBtn.disabled = false;
     sampleBtn.disabled = false;
@@ -469,6 +658,21 @@ sampleBtn.addEventListener('click', async () => {
     sampleBtn.disabled = false;
     stopBtn.disabled = true;
   }
+});
+
+downloadBtn.addEventListener('click', () => {
+  if (!recordedWavBlob) return;
+  const url = URL.createObjectURL(recordedWavBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  a.download = `fesk-recording-${stamp}.wav`;
+  document.body.appendChild(a);
+  a.click();
+  requestAnimationFrame(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
 });
 
 // Handle candidates from both banks
