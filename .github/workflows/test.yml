@@ -113,10 +113,9 @@ jobs:
       - name: Run cypress tests
         uses: cypress-io/github-action@v6
         with:
-          start: npm run dev
+          start: npm start
           wait-on: http://localhost:3000
           browser: chrome
-          working-directory: webapp
         env:
           CYPRESS_baseUrl: http://localhost:3000
 
