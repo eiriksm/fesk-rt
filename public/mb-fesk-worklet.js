@@ -31,33 +31,55 @@ class MultiBankFESK extends AudioWorkletProcessor {
       this.energyOn = Number.isFinite(energyOn) ? energyOn : 0;
       this.energyOff = Number.isFinite(energyOff) ? energyOff : 0;
       if (this.energyOn < this.energyOff) this.energyOn = this.energyOff;
-      this.minToneSamples = Math.max(1, Math.round((Number.isFinite(minToneMs) ? minToneMs : 0) * sampleRate / 1000));
-      this.minGapSamples = Math.max(1, Math.round((Number.isFinite(minGapMs) ? minGapMs : 0) * sampleRate / 1000));
-      this.ignoreHeadSamples = Math.max(0, Math.round((Number.isFinite(ignoreHeadMs) ? ignoreHeadMs : 0) * sampleRate / 1000));
-      const envMs = Math.max(1, Math.round(Number.isFinite(envelopeMs) ? envelopeMs : 8));
+      this.minToneSamples = Math.max(
+        1,
+        Math.round(
+          ((Number.isFinite(minToneMs) ? minToneMs : 0) * sampleRate) / 1000,
+        ),
+      );
+      this.minGapSamples = Math.max(
+        1,
+        Math.round(
+          ((Number.isFinite(minGapMs) ? minGapMs : 0) * sampleRate) / 1000,
+        ),
+      );
+      this.ignoreHeadSamples = Math.max(
+        0,
+        Math.round(
+          ((Number.isFinite(ignoreHeadMs) ? ignoreHeadMs : 0) * sampleRate) /
+            1000,
+        ),
+      );
+      const envMs = Math.max(
+        1,
+        Math.round(Number.isFinite(envelopeMs) ? envelopeMs : 8),
+      );
       const envSamples = Math.max(1, (envMs * sampleRate) / 1000);
       this.energyDecay = Math.exp(-1 / envSamples);
       this.energyRise = 1 - this.energyDecay;
       this.energyEnv = 0;
       this.resetToneState();
-      this.banks = Array.isArray(freqSets) ? freqSets.map((freqs) => {
-        const coeffs = new Float32Array(4);
-        for (let i = 0; i < 4; i++) {
-          const omega = (2 * Math.PI * freqs[i]) / sampleRate;
-          coeffs[i] = 2 * Math.cos(omega);
-        }
-        return { coeffs };
-      }) : [];
+      this.banks = Array.isArray(freqSets)
+        ? freqSets.map((freqs) => {
+            const coeffs = new Float32Array(4);
+            for (let i = 0; i < 4; i++) {
+              const omega = (2 * Math.PI * freqs[i]) / sampleRate;
+              coeffs[i] = 2 * Math.cos(omega);
+            }
+            return { coeffs };
+          })
+        : [];
       this.ready = true;
-      this.port.postMessage({ t: 'ready', sr: sampleRate });
+      this.port.postMessage({ t: "ready", sr: sampleRate });
     };
   }
 
   emitInactive() {
     if (!this.banks.length) return;
     const results = [];
-    for (let b = 0; b < this.banks.length; b++) results.push({ bank: b, active: false });
-    this.port.postMessage({ t: 'candidates', results });
+    for (let b = 0; b < this.banks.length; b++)
+      results.push({ bank: b, active: false });
+    this.port.postMessage({ t: "candidates", results });
   }
 
   resetToneState() {
@@ -140,7 +162,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
       const score = (vMax - v2) / Math.max(1e-12, energy);
       results.push({ bank: b, active: true, idx: iMax, score });
     }
-    if (results.length) this.port.postMessage({ t: 'candidates', results });
+    if (results.length) this.port.postMessage({ t: "candidates", results });
     this.resetToneState();
   }
 
@@ -151,7 +173,8 @@ class MultiBankFESK extends AudioWorkletProcessor {
     for (let i = 0; i < x.length; i++) {
       const sample = x[i];
       const energyInst = sample * sample;
-      this.energyEnv = this.energyEnv * this.energyDecay + energyInst * this.energyRise;
+      this.energyEnv =
+        this.energyEnv * this.energyDecay + energyInst * this.energyRise;
       if (!this.toneActive) {
         if (this.energyEnv >= this.energyOn) {
           this.toneActive = true;
@@ -177,4 +200,4 @@ class MultiBankFESK extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor('mb-fesk', MultiBankFESK);
+registerProcessor("mb-fesk", MultiBankFESK);
