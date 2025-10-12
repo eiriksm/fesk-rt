@@ -80,6 +80,10 @@
     background: #fafafa;
     overflow-x: auto;
   }
+  #out .provisional {
+    opacity: .65;
+    border-bottom: 1px dotted rgba(0,0,0,.4);
+  }
   @media (max-width: 480px) {
     .info-item strong { white-space: nowrap; }
   }
@@ -193,6 +197,25 @@ function decodePayloadTrits(trits) {
   return { ok:true, text: out.join("") };
 }
 
+function decodePayloadTritsPartial(trits) {
+  const out = [];
+  let node = TRIE;
+  let consumed = 0;
+  for (let i = 0; i < trits.length; i++) {
+    const d = String(trits[i]);
+    if (!node[d]) {
+      return { ok:false, text: out.join(""), consumed };
+    }
+    node = node[d];
+    if (node.$) {
+      out.push(node.$);
+      consumed = i + 1;
+      node = TRIE;
+    }
+  }
+  return { ok:true, text: out.join(""), consumed };
+}
+
 // =================== UI helpers ===================
 const statusEl = document.getElementById('status');
 const outEl = document.getElementById('out');
@@ -221,7 +244,10 @@ if (typeof MediaRecorder === 'undefined') {
 }
 
 function setStatus(s){ statusEl.textContent = s; }
-function print(s){ outEl.textContent += s; }
+function print(s){
+  if (!s) return;
+  outEl.append(document.createTextNode(s));
+}
 function formatFreq(f){
   const txt = f.toFixed(1);
   return (txt.endsWith('.0') ? txt.slice(0, -2) : txt) + ' Hz';
@@ -402,9 +428,54 @@ function mkDec() {
     startMatch: 0,
     markerBuf: [],
     markerScores: [],
+    previewNode: null,
+    previewText: '',
+    previewConsumed: 0,
   };
 }
 const DEC = [ mkDec(), mkDec() ];
+
+function ensurePreview(dec) {
+  if (dec.previewNode) return;
+  const span = document.createElement('span');
+  span.className = 'provisional';
+  dec.previewNode = span;
+  dec.previewText = '';
+  dec.previewConsumed = 0;
+  outEl.append(span);
+}
+
+function updatePreview(dec) {
+  if (!dec.frameTrits.length) return;
+  const res = decodePayloadTritsPartial(dec.frameTrits);
+  if (!res.ok) return;
+  const {text, consumed} = res;
+  if (consumed <= dec.previewConsumed) return;
+  ensurePreview(dec);
+  const newText = text.slice(dec.previewText.length);
+  if (newText) {
+    dec.previewText += newText;
+    dec.previewNode.textContent = dec.previewText;
+  }
+  dec.previewConsumed = consumed;
+}
+
+function commitPreview(dec, result) {
+  const shouldKeep = result.ok && result.okCRC && result.text;
+  if (dec.previewNode) {
+    if (shouldKeep) {
+      dec.previewNode.replaceWith(document.createTextNode(result.text));
+    } else {
+      dec.previewNode.remove();
+    }
+    dec.previewNode = null;
+  } else if (shouldKeep) {
+    print(result.text);
+  }
+  dec.previewText = '';
+  dec.previewConsumed = 0;
+}
+
 function resetDec(d){
   d.state = 'idle';
   d.frameTrits.length = 0;
@@ -412,6 +483,12 @@ function resetDec(d){
   d.startMatch = 0;
   d.markerBuf.length = 0;
   d.markerScores.length = 0;
+  if (d.previewNode) {
+    d.previewNode.remove();
+    d.previewNode = null;
+  }
+  d.previewText = '';
+  d.previewConsumed = 0;
 }
 function resetAllDecoders(){ for (const d of DEC) resetDec(d); }
 
@@ -520,12 +597,14 @@ function feedOne(dec, symIdx, score) {
     const flushedScore = dec.markerScores.shift();
     dec.frameTrits.push(flushed);
     dec.scores.push(flushedScore);
+    updatePreview(dec);
   }
 
   if (dec.markerBuf.length === FRAME_MARK_LEN) {
     // Found end marker: validate collected frame.
     if (dec.frameTrits.length < CRC_TRIT_COUNT) {
       const r = {ok:false, okCRC:false, why:'short'};
+      commitPreview(dec, r);
       resetDec(dec);
       return r;
     }
@@ -552,6 +631,7 @@ function feedOne(dec, symIdx, score) {
       : 0;
 
     const result = {ok, okCRC, text, avgScore};
+    commitPreview(dec, result);
     resetDec(dec);
     return result;
   }
@@ -698,10 +778,12 @@ function handleCandidates(results){
 
     const out = feedOne(DEC[r.bank], r.idx, r.score);
     if (out) {
-      // Print as soon as a bank returns a CRC-valid decoded frame
       if (out.ok && out.okCRC && out.text) {
-        print(out.text);
         setStatus(`frame OK (bank ${r.bank})`);
+      } else if (!out.okCRC) {
+        setStatus(`frame CRC fail (bank ${r.bank})`);
+      } else if (!out.ok) {
+        setStatus(`frame decode fail (bank ${r.bank})`);
       }
     }
   }
