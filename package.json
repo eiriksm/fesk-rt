@@ -6,7 +6,7 @@
     "cy:open": "cypress open",
     "cy:run": "cypress run",
     "start": "npx -y serve public",
-    "prettier-check": "prettier --check public/*"
+    "prettier-check": "prettier --check public/*.js"
   },
   "devDependencies": {
     "cypress": "^13.6.4",
