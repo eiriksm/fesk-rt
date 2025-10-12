@@ -55,20 +55,36 @@
     flex: 1 1 220px;
     min-width: 140px;
   }
-  .muted {
-    color: #666;
-    font-size: .875rem;
+  details.debug-panel {
+    margin-top: 1.5rem;
   }
-  .info-row {
+  details.debug-panel summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .debug-panel-content {
+    margin-top: .75rem;
+    display: grid;
+    gap: 1.25rem;
+  }
+  .debug-controls {
     display: flex;
     flex-wrap: wrap;
-    gap: .75rem 1.5rem;
+    gap: .75rem;
   }
-  .info-item {
+  .debug-controls button {
+    flex: 1 1 220px;
+    min-width: 140px;
+  }
+  .debug-metrics {
+    display: grid;
+    gap: .5rem;
+  }
+  .debug-metric {
     display: flex;
     gap: .35rem;
     align-items: baseline;
-    font-size: 1rem;
+    font-size: .95rem;
   }
   #out {
     border: 1px solid #ddd;
@@ -105,7 +121,7 @@
     font-weight: 600;
   }
   @media (max-width: 480px) {
-    .info-item strong { white-space: nowrap; }
+    .debug-metric strong { white-space: nowrap; }
   }
 </style>
 
@@ -114,15 +130,25 @@
   <div class="row controls">
     <button id="startBtn">Start 🎙️</button>
     <button id="stopBtn" disabled>Stop 🚫</button>
-    <button id="sampleBtn">Play Sample 🔊</button>
     <button id="downloadBtn" disabled>Download WAV ⬇️</button>
   </div>
-  <div class="row info-row">
-    <div class="info-item"><strong>Status:</strong> <span id="status">idle</span></div>
-    <div class="info-item"><strong>SR:</strong> <span id="sr">—</span></div>
-    <div class="info-item"><strong>Bank A:</strong> <span id="freq0">—</span></div>
-    <div class="info-item"><strong>Bank B:</strong> <span id="freq1">—</span></div>
-  </div>
+  <details class="debug-panel">
+    <summary>Debug</summary>
+    <div class="debug-panel-content">
+      <div class="debug-controls">
+        <button id="sample1Btn">Play Sample 1 🔊</button>
+        <button id="sample2Btn">Play Sample 2 🔊</button>
+      </div>
+      <div class="debug-metrics">
+        <div class="debug-metric"><strong>Overall status:</strong> <span id="status">idle</span></div>
+        <div class="debug-metric"><strong>SR:</strong> <span id="sr">—</span></div>
+        <div class="debug-metric"><strong>Bank A Hz:</strong> <span id="freq0">—</span></div>
+        <div class="debug-metric"><strong>Bank A status:</strong> <span id="bankStatus0">—</span></div>
+        <div class="debug-metric"><strong>Bank B Hz:</strong> <span id="freq1">—</span></div>
+        <div class="debug-metric"><strong>Bank B status:</strong> <span id="bankStatus1">—</span></div>
+      </div>
+    </div>
+  </details>
   <div class="row"><strong>Decoded output:</strong></div>
   <div id="out"></div>
 </div>
@@ -140,7 +166,10 @@ const MIN_TONE_MS = 0;
 const MIN_GAP_MS = 10;
 const IGNORE_HEAD_MS = 4;
 const ENERGY_ENVELOPE_MS = 8;
-const SAMPLE_WAV_URL = 'sample.wav';
+const SAMPLE_WAV_CONFIG = [
+  {id:'sample1Btn', url:'sample.wav', label:'1'},
+  {id:'sample2Btn', url:'sample2.wav', label:'2'},
+];
 
 // Two frequency banks (Hz) — adjust as needed.
 // Bank A matches your spec (index 0..3): 0→F7, 1→A7, 2→D8, 3→G6
@@ -242,11 +271,21 @@ const outEl = document.getElementById('out');
 const srEl = document.getElementById('sr');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
-const sampleBtn = document.getElementById('sampleBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const DOWNLOAD_LABEL = 'Download WAV ⬇️';
 const freqEls = FREQS_SETS.map((_, i) => document.getElementById(`freq${i}`));
+const bankStatusEls = FREQS_SETS.map((_, i) => document.getElementById(`bankStatus${i}`));
 const bankOutputEls = [];
+const sampleButtons = SAMPLE_WAV_CONFIG
+  .map(({id, url, label}) => {
+    const button = document.getElementById(id);
+    return button ? {button, url, label} : null;
+  })
+  .filter(Boolean);
+
+function setSampleButtonsDisabled(disabled){
+  for (const entry of sampleButtons) entry.button.disabled = disabled;
+}
 
 setupOutputContainers();
 
@@ -302,8 +341,14 @@ function formatFreq(f){
   return (txt.endsWith('.0') ? txt.slice(0, -2) : txt) + ' Hz';
 }
 function resetFreqDisplays(){ for (const el of freqEls) if (el) el.textContent = '—'; }
+function resetBankStatuses(){ for (const el of bankStatusEls) if (el) el.textContent = '—'; }
+function setBankStatus(bank, text){
+  const el = bankStatusEls[bank];
+  if (el) el.textContent = text;
+}
 
 resetFreqDisplays();
+resetBankStatuses();
 
 function getRecorderMimeType(){
   if (typeof MediaRecorder === 'undefined') return null;
@@ -577,6 +622,7 @@ async function cleanup(nextStatus, opts={}){
   srEl.textContent = '—';
   resetAllDecoders();
   resetFreqDisplays();
+  resetBankStatuses();
   suppressReadyStatus = false;
   if (typeof nextStatus === 'string') setStatus(nextStatus);
 }
@@ -584,6 +630,7 @@ async function cleanup(nextStatus, opts={}){
 async function initProcessingChain(){
   resetAllDecoders();
   resetFreqDisplays();
+  resetBankStatuses();
   setStatus('initializing audio…');
   audioCtx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
   srEl.textContent = audioCtx.sampleRate.toFixed(0) + ' Hz';
@@ -704,7 +751,7 @@ let suppressReadyStatus = false;
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
   stopBtn.disabled = true;
-  sampleBtn.disabled = true;
+  setSampleButtonsDisabled(true);
   try {
     await cleanup(null);
     await initProcessingChain();
@@ -722,7 +769,7 @@ startBtn.addEventListener('click', async () => {
     setStatus('error: ' + (err && err.message || err));
     await cleanup(null);
     startBtn.disabled = false;
-    sampleBtn.disabled = false;
+    setSampleButtonsDisabled(false);
     stopBtn.disabled = true;
   }
 });
@@ -734,22 +781,30 @@ stopBtn.addEventListener('click', async () => {
     await cleanup(result && result.hadError ? undefined : 'stopped', {skipRecorderStop:true});
   } finally {
     startBtn.disabled = false;
-    sampleBtn.disabled = false;
+    setSampleButtonsDisabled(false);
   }
   console.log(aTones.join(" "))
   console.log(bTones.join(" "))
 });
 
-sampleBtn.addEventListener('click', async () => {
+for (const entry of sampleButtons) {
+  entry.button.addEventListener('click', async () => {
+    await playSample(entry);
+  });
+}
+
+async function playSample(entry){
+  const {url, label} = entry;
   startBtn.disabled = true;
-  sampleBtn.disabled = true;
+  setSampleButtonsDisabled(true);
   stopBtn.disabled = true;
   try {
     await cleanup(null);
     suppressReadyStatus = true;
     await initProcessingChain();
-    setStatus('loading WAV…');
-    const response = await fetch(SAMPLE_WAV_URL);
+    const labelSuffix = label ? ` ${label}` : '';
+    setStatus(`loading sample${labelSuffix}…`);
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`fetch failed (${response.status})`);
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await new Promise((resolve, reject) => {
@@ -786,18 +841,18 @@ sampleBtn.addEventListener('click', async () => {
       console.log(aTones.join(" "))
       console.log(bTones.join(" "))
       startBtn.disabled = false;
-      sampleBtn.disabled = false;
+      setSampleButtonsDisabled(false);
     };
-    setStatus('playing sample…');
+    setStatus(`playing sample${labelSuffix}…`);
     stopBtn.disabled = false;
   } catch (err) {
     setStatus('error: ' + (err && err.message || err));
     await cleanup(null);
     startBtn.disabled = false;
-    sampleBtn.disabled = false;
+    setSampleButtonsDisabled(false);
     stopBtn.disabled = true;
   }
-});
+}
 
 downloadBtn.addEventListener('click', () => {
   if (!recordedWavBlob) return;
@@ -832,13 +887,18 @@ function handleCandidates(results){
 
     const out = feedOne(DEC[r.bank], r.idx, r.score);
     if (out) {
+      let bankMsg = null;
       if (out.ok && out.okCRC && out.text) {
         setStatus(`frame OK (bank ${r.bank})`);
+        bankMsg = 'frame OK';
       } else if (!out.okCRC) {
         setStatus(`frame CRC fail (bank ${r.bank})`);
+        bankMsg = 'CRC fail';
       } else if (!out.ok) {
         setStatus(`frame decode fail (bank ${r.bank})`);
+        bankMsg = 'decode fail';
       }
+      if (bankMsg) setBankStatus(r.bank, bankMsg);
     }
   }
   for (let i = 0; i < activeBanks.length; i++) {
