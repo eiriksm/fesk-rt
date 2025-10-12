@@ -12,6 +12,9 @@ class MultiBankFESK extends AudioWorkletProcessor {
     this.energyEnv = 0;
     this.energyDecay = 0.99;
     this.energyRise = 1 - this.energyDecay;
+    this.hpAlpha = 0;
+    this.hpLastX = 0;
+    this.hpLastY = 0;
     this.toneActive = false;
     this.toneBuffer = [];
     this.toneSamples = 0;
@@ -26,6 +29,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
         minGapMs,
         ignoreHeadMs,
         envelopeMs,
+        hpCutoffHz,
       } = e.data;
       this.energyFloor = Number.isFinite(energyFloor) ? energyFloor : 0;
       this.energyOn = Number.isFinite(energyOn) ? energyOn : 0;
@@ -58,6 +62,10 @@ class MultiBankFESK extends AudioWorkletProcessor {
       this.energyDecay = Math.exp(-1 / envSamples);
       this.energyRise = 1 - this.energyDecay;
       this.energyEnv = 0;
+      const hpHz = Number.isFinite(hpCutoffHz) ? hpCutoffHz : 600;
+      this.hpAlpha = Math.exp((-2 * Math.PI * hpHz) / sampleRate);
+      this.hpLastX = 0;
+      this.hpLastY = 0;
       this.resetToneState();
       this.banks = Array.isArray(freqSets)
         ? freqSets.map((freqs) => {
@@ -172,9 +180,12 @@ class MultiBankFESK extends AudioWorkletProcessor {
     if (!x) return true;
     for (let i = 0; i < x.length; i++) {
       const sample = x[i];
-      const energyInst = sample * sample;
+      const filtered = sample - this.hpLastX + this.hpAlpha * this.hpLastY;
+      this.hpLastX = sample;
+      this.hpLastY = filtered;
+      const energy = filtered * filtered;
       this.energyEnv =
-        this.energyEnv * this.energyDecay + energyInst * this.energyRise;
+        this.energyEnv * this.energyDecay + energy * this.energyRise;
       if (!this.toneActive) {
         if (this.energyEnv >= this.energyOn) {
           this.toneActive = true;
@@ -184,7 +195,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
         }
       }
       if (this.toneActive) {
-        this.toneBuffer.push(sample);
+        this.toneBuffer.push(filtered);
         this.toneSamples++;
         if (this.energyEnv <= this.energyOff) {
           this.gapSamples++;
