@@ -33,5 +33,4 @@ describe("FESK real time with known samples", () => {
       .should("not.be.empty")
       .should("contain.text", "abc 123");
   });
-
 });
