@@ -142,13 +142,9 @@
         <button id="sample1Btn">Play Sample 1 🔊</button>
         <button id="sample2Btn">Play Sample 2 🔊</button>
       </div>
-      <div class="debug-metrics">
+      <div class="debug-metrics" id="debugMetrics">
         <div class="debug-metric"><strong>Overall status:</strong> <span id="status">idle</span></div>
         <div class="debug-metric"><strong>SR:</strong> <span id="sr">—</span></div>
-        <div class="debug-metric"><strong>Bank A Hz:</strong> <span id="freq0">—</span></div>
-        <div class="debug-metric"><strong>Bank A status:</strong> <span id="bankStatus0">—</span></div>
-        <div class="debug-metric"><strong>Bank B Hz:</strong> <span id="freq1">—</span></div>
-        <div class="debug-metric"><strong>Bank B status:</strong> <span id="bankStatus1">—</span></div>
       </div>
     </div>
   </details>
@@ -158,8 +154,7 @@
 
 <script type="module">
 
-const aTones = []
-const bTones = []
+let bankTones = [];
 // =================== CONFIG ===================
 const ENERGY_FLOOR = 1e-7; // raise a bit if your room is noisy
 // Streaming tone detector parameters
@@ -174,11 +169,10 @@ const SAMPLE_WAV_CONFIG = [
   {id:'sample2Btn', url:'sample2.wav', label:'2'},
 ];
 
-// Two frequency banks (Hz) — adjust as needed.
-// Bank A matches your spec (index 0..3): 0→F7, 1→A7, 2→D8, 3→G6
 const FREQS_SETS = [
   [2793.83, 3520.00, 4698.63, 1567.98], // Bank A (spec)
   [2700.00, 3400.00, 4600.00, 1600.00], // Bank B (alt/tolerant)
+  [11060.0, 12420.0, 17420.0, 9280.0]
 ];
 // Framing marker
 const FRAME_MARK = "333";
@@ -276,8 +270,9 @@ const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const DOWNLOAD_LABEL = 'Download WAV ⬇️';
-const freqEls = FREQS_SETS.map((_, i) => document.getElementById(`freq${i}`));
-const bankStatusEls = FREQS_SETS.map((_, i) => document.getElementById(`bankStatus${i}`));
+const debugMetricsEl = document.getElementById('debugMetrics');
+const freqEls = [];
+const bankStatusEls = [];
 const bankOutputEls = [];
 const sampleButtons = SAMPLE_WAV_CONFIG
   .map(({id, url, label}) => {
@@ -286,10 +281,42 @@ const sampleButtons = SAMPLE_WAV_CONFIG
   })
   .filter(Boolean);
 
+// Dynamically create bank debug metrics
+function setupBankDebugMetrics(){
+  FREQS_SETS.forEach((_, idx) => {
+    const label = bankLabel(idx);
+
+    // Create Hz metric
+    const hzMetric = document.createElement('div');
+    hzMetric.className = 'debug-metric';
+    const hzLabel = document.createElement('strong');
+    hzLabel.textContent = `Bank ${label} Hz:`;
+    const hzValue = document.createElement('span');
+    hzValue.id = `freq${idx}`;
+    hzValue.textContent = '—';
+    hzMetric.append(hzLabel, ' ', hzValue);
+    debugMetricsEl.append(hzMetric);
+    freqEls[idx] = hzValue;
+
+    // Create status metric
+    const statusMetric = document.createElement('div');
+    statusMetric.className = 'debug-metric';
+    const statusLabel = document.createElement('strong');
+    statusLabel.textContent = `Bank ${label} status:`;
+    const statusValue = document.createElement('span');
+    statusValue.id = `bankStatus${idx}`;
+    statusValue.textContent = '—';
+    statusMetric.append(statusLabel, ' ', statusValue);
+    debugMetricsEl.append(statusMetric);
+    bankStatusEls[idx] = statusValue;
+  });
+}
+
 function setSampleButtonsDisabled(disabled){
   for (const entry of sampleButtons) entry.button.disabled = disabled;
 }
 
+setupBankDebugMetrics();
 setupOutputContainers();
 
 let recorder = null;
@@ -777,6 +804,14 @@ startBtn.addEventListener('click', async () => {
   }
 });
 
+function logTones(){
+  bankTones.forEach((tones, i) => {
+    const label = bankLabel(i);
+    console.log(`Bank ${label} tones: ${tones.join(' ')}`);
+  });
+  bankTones = [];
+}
+
 stopBtn.addEventListener('click', async () => {
   stopBtn.disabled = true;
   try {
@@ -786,8 +821,7 @@ stopBtn.addEventListener('click', async () => {
     startBtn.disabled = false;
     setSampleButtonsDisabled(false);
   }
-  console.log(aTones.join(" "))
-  console.log(bTones.join(" "))
+  logTones();
 });
 
 for (const entry of sampleButtons) {
@@ -841,8 +875,7 @@ async function playSample(entry){
       bufferSrc = null;
       stopBtn.disabled = true;
       await cleanup('sample finished');
-      console.log(aTones.join(" "))
-      console.log(bTones.join(" "))
+      logTones();
       startBtn.disabled = false;
       setSampleButtonsDisabled(false);
     };
@@ -882,11 +915,8 @@ function handleCandidates(results){
       freqEls[r.bank].textContent = formatFreq(FREQS_SETS[r.bank][r.idx]);
       activeBanks[r.bank] = true;
     }
-    if (r.bank === 0) {
-      aTones.push(r.idx);
-    } else {
-      bTones.push(r.idx);
-    }
+    if (!bankTones[r.bank]) bankTones[r.bank] = [];
+    bankTones[r.bank].push(r.idx);
 
     const out = feedOne(DEC[r.bank], r.idx, r.score);
     if (out) {
