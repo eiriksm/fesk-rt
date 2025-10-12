@@ -141,6 +141,7 @@
       <div class="debug-controls">
         <button id="sample1Btn">Play Sample 1 🔊</button>
         <button id="sample2Btn">Play Sample 2 🔊</button>
+        <button id="sample3Btn">Play Sample 3 🔊</button>
       </div>
       <div class="debug-metrics" id="debugMetrics">
         <div class="debug-metric"><strong>Overall status:</strong> <span id="status">idle</span></div>
@@ -156,23 +157,25 @@
 
 let bankTones = [];
 // =================== CONFIG ===================
-const ENERGY_FLOOR = 1e-7; // raise a bit if your room is noisy
+const ENERGY_FLOOR = 1e-6; // raise a bit if your room is noisy
 // Streaming tone detector parameters
-const ENERGY_ON = 1.5e-5;
-const ENERGY_OFF = 4e-6;
+const ENERGY_ON = 1.5e-3;
+const ENERGY_OFF = 4e-4;
+const MIN_GAP_MS = 4;
+const IGNORE_HEAD_MS = 3;
+const ENERGY_ENVELOPE_MS = 4;
 const MIN_TONE_MS = 0;
-const MIN_GAP_MS = 5;
-const IGNORE_HEAD_MS = 4;
-const ENERGY_ENVELOPE_MS = 8;
+const HP_CUTOFF_HZ = 600;
 const SAMPLE_WAV_CONFIG = [
   {id:'sample1Btn', url:'sample.wav', label:'1'},
   {id:'sample2Btn', url:'sample2.wav', label:'2'},
+  {id:'sample3Btn', url:'sample-clock-on-phone.wav', label:'3'},
 ];
 
 const FREQS_SETS = [
   [2793.83, 3520.00, 4698.63, 1567.98], // Bank A (spec)
   [2700.00, 3400.00, 4600.00, 1600.00], // Bank B (alt/tolerant)
-  [11060.0, 12420.0, 17420.0, 9280.0]
+  [11060, 17420, 9280, 12420]
 ];
 // Framing marker
 const FRAME_MARK = "333";
@@ -683,6 +686,7 @@ async function initProcessingChain(){
     minGapMs: MIN_GAP_MS,
     ignoreHeadMs: IGNORE_HEAD_MS,
     envelopeMs: ENERGY_ENVELOPE_MS,
+    hpCutoffHz: HP_CUTOFF_HZ,
   });
   return workletNode;
 }
