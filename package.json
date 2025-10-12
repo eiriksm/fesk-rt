@@ -8,6 +8,8 @@
     "start": "npx -y serve public"
   },
   "devDependencies": {
-    "cypress": "^13.6.4"
+    "cypress": "^13.6.4",
+    "eslint": "^9.37.0",
+    "prettier": "^3.6.2"
   }
 }
