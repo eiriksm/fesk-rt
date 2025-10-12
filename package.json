@@ -5,7 +5,8 @@
   "scripts": {
     "cy:open": "cypress open",
     "cy:run": "cypress run",
-    "start": "npx -y serve public"
+    "start": "npx -y serve public",
+    "prettier-check": "prettier --check public/*.js"
   },
   "devDependencies": {
     "cypress": "^15.4.0"
