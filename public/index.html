@@ -71,18 +71,38 @@
     font-size: 1rem;
   }
   #out {
-    white-space: pre-wrap;
-    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
     border: 1px solid #ddd;
     border-radius: 12px;
     padding: 12px;
     min-height: 6rem;
     background: #fafafa;
-    overflow-x: auto;
+    display: grid;
+    gap: 12px;
   }
   #out .provisional {
     opacity: .65;
     border-bottom: 1px dotted rgba(0,0,0,.4);
+  }
+  .out-bank {
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #fff;
+  }
+  .out-bank-title {
+    font-weight: 600;
+    font-size: .95rem;
+    color: #333;
+    margin-bottom: .4rem;
+  }
+  .out-bank-body {
+    white-space: pre-wrap;
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow-x: auto;
+  }
+  .decoded-ok {
+    color: #0f7a3c;
+    font-weight: 600;
   }
   @media (max-width: 480px) {
     .info-item strong { white-space: nowrap; }
@@ -126,7 +146,7 @@ const SAMPLE_WAV_URL = 'sample.wav';
 // Bank A matches your spec (index 0..3): 0→F7, 1→A7, 2→D8, 3→G6
 const FREQS_SETS = [
   [2793.83, 3520.00, 4698.63, 1567.98], // Bank A (spec)
-  // [2700.00, 3400.00, 4600.00, 1600.00], // Bank B (alt/tolerant)
+  [2700.00, 3400.00, 4600.00, 1600.00], // Bank B (alt/tolerant)
 ];
 // Framing marker
 const FRAME_MARK = "333";
@@ -226,6 +246,9 @@ const sampleBtn = document.getElementById('sampleBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const DOWNLOAD_LABEL = 'Download WAV ⬇️';
 const freqEls = FREQS_SETS.map((_, i) => document.getElementById(`freq${i}`));
+const bankOutputEls = [];
+
+setupOutputContainers();
 
 let recorder = null;
 let recordedChunks = [];
@@ -244,9 +267,35 @@ if (typeof MediaRecorder === 'undefined') {
 }
 
 function setStatus(s){ statusEl.textContent = s; }
-function print(s){
-  if (!s) return;
-  outEl.append(document.createTextNode(s));
+function bankLabel(idx){
+  if (idx >= 0 && idx < 26) return String.fromCharCode(65 + idx);
+  return String(idx + 1);
+}
+
+function setupOutputContainers(){
+  outEl.textContent = '';
+  FREQS_SETS.forEach((_, idx) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'out-bank';
+    const title = document.createElement('div');
+    title.className = 'out-bank-title';
+    title.textContent = `Bank ${bankLabel(idx)}`;
+    const body = document.createElement('div');
+    body.className = 'out-bank-body';
+    wrapper.append(title, body);
+    outEl.append(wrapper);
+    bankOutputEls[idx] = body;
+  });
+}
+
+function appendResult(bank, text){
+  if (!text) return;
+  const target = bankOutputEls[bank];
+  if (!target) return;
+  const span = document.createElement('span');
+  span.className = 'decoded-ok';
+  span.textContent = text;
+  target.append(span);
 }
 function formatFreq(f){
   const txt = f.toFixed(1);
@@ -420,7 +469,7 @@ function audioBufferToWav(buffer){
 }
 
 // =================== Dual decoder state ===================
-function mkDec() {
+function mkDec(bank) {
   return {
     state: 'idle',
     frameTrits: [],
@@ -431,18 +480,21 @@ function mkDec() {
     previewNode: null,
     previewText: '',
     previewConsumed: 0,
+    bank,
   };
 }
-const DEC = [ mkDec(), mkDec() ];
+const DEC = FREQS_SETS.map((_, bank) => mkDec(bank));
 
 function ensurePreview(dec) {
   if (dec.previewNode) return;
+  const target = bankOutputEls[dec.bank];
+  if (!target) return;
   const span = document.createElement('span');
   span.className = 'provisional';
   dec.previewNode = span;
   dec.previewText = '';
   dec.previewConsumed = 0;
-  outEl.append(span);
+  target.append(span);
 }
 
 function updatePreview(dec) {
@@ -464,13 +516,15 @@ function commitPreview(dec, result) {
   const shouldKeep = result.ok && result.okCRC && result.text;
   if (dec.previewNode) {
     if (shouldKeep) {
-      dec.previewNode.replaceWith(document.createTextNode(result.text));
+      dec.previewNode.classList.remove('provisional');
+      dec.previewNode.classList.add('decoded-ok');
+      dec.previewNode.textContent = result.text;
     } else {
       dec.previewNode.remove();
     }
     dec.previewNode = null;
   } else if (shouldKeep) {
-    print(result.text);
+    appendResult(dec.bank, result.text);
   }
   dec.previewText = '';
   dec.previewConsumed = 0;
