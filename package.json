@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "cy:open": "cypress open",
-    "cy:run": "cypress run",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
     "start": "npx -y serve public",
-    "prettier-check": "prettier --check public/*.js"
+    "prettier-check": "prettier --check public/*.js cypress/**/*.js"
   },
   "devDependencies": {
     "cypress": "^15.4.0",
