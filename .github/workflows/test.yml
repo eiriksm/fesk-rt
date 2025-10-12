@@ -10,7 +10,6 @@ on:
 
 jobs:
   test-prettier:
-    if: false
     name: Prettier check
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -24,7 +23,7 @@ jobs:
           node-version-file: '.nvmrc'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Run tests
         run: npm run prettier-check
