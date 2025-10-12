@@ -8,6 +8,6 @@
     "start": "npx -y serve public"
   },
   "devDependencies": {
-    "cypress": "^13.6.4"
+    "cypress": "^15.4.0"
   }
 }
