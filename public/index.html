@@ -166,6 +166,8 @@ const IGNORE_HEAD_MS = 3;
 const ENERGY_ENVELOPE_MS = 4;
 const MIN_TONE_MS = 0;
 const HP_CUTOFF_HZ = 600;
+const INPUT_GAIN = 12;
+const SCORE_MIN = 0.25;
 const SAMPLE_WAV_CONFIG = [
   {id:'sample1Btn', url:'sample.wav', label:'1'},
   {id:'sample2Btn', url:'sample2.wav', label:'2'},
@@ -640,6 +642,10 @@ async function cleanup(nextStatus, opts={}){
     try { workletNode.disconnect(); } catch (_) {}
     workletNode = null;
   }
+  if (inputGainNode) {
+    try { inputGainNode.disconnect(); } catch (_) {}
+    inputGainNode = null;
+  }
   if (mediaSrc) {
     try { mediaSrc.disconnect(); } catch (_) {}
     mediaSrc = null;
@@ -670,6 +676,9 @@ async function initProcessingChain(){
   const workletModuleUrl = new URL('./mb-fesk-worklet.js', import.meta.url);
   await audioCtx.audioWorklet.addModule(workletModuleUrl);
   workletNode = new AudioWorkletNode(audioCtx, 'mb-fesk', {numberOfInputs:1, numberOfOutputs:0});
+  inputGainNode = audioCtx.createGain();
+  inputGainNode.gain.value = INPUT_GAIN;
+  inputGainNode.connect(workletNode);
   workletNode.port.onmessage = (e)=>{
     const m = e.data;
     if (m.t==='ready') {
@@ -780,6 +789,7 @@ let mediaStream = null;
 let mediaSrc = null;
 let workletNode = null;
 let bufferSrc = null;
+let inputGainNode = null;
 let suppressReadyStatus = false;
 
 startBtn.addEventListener('click', async () => {
@@ -794,7 +804,7 @@ startBtn.addEventListener('click', async () => {
       audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false, channelCount:1 }
     });
     mediaSrc = audioCtx.createMediaStreamSource(mediaStream);
-    mediaSrc.connect(workletNode);
+    if (inputGainNode) mediaSrc.connect(inputGainNode);
     clearRecording();
     setupRecorder(mediaStream);
     setStatus('listening… wait for 333 start marker');
@@ -915,6 +925,7 @@ function handleCandidates(results){
   // For each active bank candidate, feed its decoder
   for (const r of results) {
     if (!r.active) continue;
+    if ((r.score ?? 0) < SCORE_MIN) continue;
     if (freqEls[r.bank]) {
       freqEls[r.bank].textContent = formatFreq(FREQS_SETS[r.bank][r.idx]);
       activeBanks[r.bank] = true;
