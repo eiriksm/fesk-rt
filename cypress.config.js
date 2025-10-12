@@ -1,26 +1,29 @@
-import { defineConfig } from 'cypress'
-import path from 'path'
+import { defineConfig } from "cypress";
+import path from "path";
 
 export default defineConfig({
   e2e: {
-    baseUrl: 'http://localhost:3000',
-    supportFile: 'cypress/support/e2e.js',
-    specPattern: 'cypress/e2e/**/*.cy.js',
+    baseUrl: "http://localhost:3000",
+    supportFile: "cypress/support/e2e.js",
+    specPattern: "cypress/e2e/**/*.cy.js",
     setupNodeEvents(on, config) {
-      on('before:browser:launch', (browser = {}, launchOptions) => {
-        if (browser.family === 'chromium') {
-          launchOptions.args.push('--use-fake-ui-for-media-stream')
-          launchOptions.args.push('--use-fake-device-for-media-stream')
+      on("before:browser:launch", (browser = {}, launchOptions) => {
+        if (browser.family === "chromium") {
+          launchOptions.args.push("--use-fake-ui-for-media-stream");
+          launchOptions.args.push("--use-fake-device-for-media-stream");
 
-          const audioFixture = config.env.fakeAudioCapture || 'public/sample.wav'
-          const resolvedPath = path.resolve(config.projectRoot, audioFixture)
-          launchOptions.args.push(`--use-file-for-fake-audio-capture=${resolvedPath}`)
+          const audioFixture =
+            config.env.fakeAudioCapture || "public/sample.wav";
+          const resolvedPath = path.resolve(config.projectRoot, audioFixture);
+          launchOptions.args.push(
+            `--use-file-for-fake-audio-capture=${resolvedPath}`,
+          );
         }
 
-        return launchOptions
-      })
+        return launchOptions;
+      });
 
-      return config
+      return config;
     },
     defaultCommandTimeout: 30000,
     pageLoadTimeout: 30000,
@@ -31,5 +34,5 @@ export default defineConfig({
     screenshotOnRunFailure: true,
     viewportWidth: 1280,
     viewportHeight: 720,
-  }
-})
+  },
+});
