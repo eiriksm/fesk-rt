@@ -3,7 +3,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>FESK Real-Time Decoder</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; }
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
   body {
     margin: 0;
     padding: clamp(16px, 4vw, 32px);
@@ -17,7 +21,7 @@
     background: #fff;
     padding: clamp(16px, 4vw, 32px);
     border-radius: 0;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   }
   h1 {
     margin-top: 0;
@@ -25,23 +29,26 @@
     font-size: clamp(1.5rem, 2.5vw, 2rem);
   }
   button {
-    padding: .6rem 1.1rem;
+    padding: 0.6rem 1.1rem;
     border: 1px solid #ccc;
     border-radius: 0;
     background: #fff;
     cursor: pointer;
     font: inherit;
-    transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
   }
   button:hover:not(:disabled),
   button:focus-visible {
     border-color: #888;
     background: #f0f0f0;
-    box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
   }
   button:disabled {
     cursor: not-allowed;
-    opacity: .6;
+    opacity: 0.6;
   }
   .row {
     margin: 1rem 0;
@@ -49,7 +56,7 @@
   .controls {
     display: flex;
     flex-wrap: wrap;
-    gap: .75rem;
+    gap: 0.75rem;
   }
   .controls button {
     flex: 1 1 220px;
@@ -66,14 +73,14 @@
     font-weight: 600;
   }
   .debug-panel-content {
-    margin-top: .75rem;
+    margin-top: 0.75rem;
     display: grid;
     gap: 1.25rem;
   }
   .debug-controls {
     display: flex;
     flex-wrap: wrap;
-    gap: .75rem;
+    gap: 0.75rem;
   }
   .debug-controls button {
     flex: 1 1 220px;
@@ -81,13 +88,13 @@
   }
   .debug-metrics {
     display: grid;
-    gap: .5rem;
+    gap: 0.5rem;
   }
   .debug-metric {
     display: flex;
-    gap: .35rem;
+    gap: 0.35rem;
     align-items: baseline;
-    font-size: .95rem;
+    font-size: 0.95rem;
   }
   #out {
     border: 1px solid #ddd;
@@ -99,8 +106,8 @@
     gap: 12px;
   }
   #out .provisional {
-    opacity: .65;
-    border-bottom: 1px dotted rgba(0,0,0,.4);
+    opacity: 0.65;
+    border-bottom: 1px dotted rgba(0, 0, 0, 0.4);
   }
   .out-bank {
     border: 1px solid #eee;
@@ -110,13 +117,17 @@
   }
   .out-bank-title {
     font-weight: 600;
-    font-size: .95rem;
+    font-size: 0.95rem;
     color: #333;
-    margin-bottom: .4rem;
+    margin-bottom: 0.4rem;
   }
   .out-bank-body {
     white-space: pre-wrap;
-    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    font:
+      14px/1.5 ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      monospace;
     overflow-x: auto;
   }
   .decoded-ok {
@@ -124,7 +135,9 @@
     font-weight: 600;
   }
   @media (max-width: 480px) {
-    .debug-metric strong { white-space: nowrap; }
+    .debug-metric strong {
+      white-space: nowrap;
+    }
   }
 </style>
 
@@ -142,10 +155,16 @@
         <button id="sample1Btn">Play Sample 1 🔊</button>
         <button id="sample2Btn">Play Sample 2 🔊</button>
         <button id="sample3Btn">Play Sample 3 🔊</button>
+        <button id="sample4Btn">Play Sample 4 🔊</button>
+        <button id="sample5Btn">Play Sample 5 🔊</button>
       </div>
       <div class="debug-metrics" id="debugMetrics">
-        <div class="debug-metric"><strong>Overall status:</strong> <span id="status">idle</span></div>
-        <div class="debug-metric"><strong>SR:</strong> <span id="sr">—</span></div>
+        <div class="debug-metric">
+          <strong>Overall status:</strong> <span id="status">idle</span>
+        </div>
+        <div class="debug-metric">
+          <strong>SR:</strong> <span id="sr">—</span>
+        </div>
       </div>
     </div>
   </details>
@@ -154,803 +173,1061 @@
 </div>
 
 <script type="module">
+  let bankTones = [];
+  // =================== CONFIG ===================
+  const FREQS_SETS = [
+    [2560.0, 3072.0],
+    [2550.0, 3088.0],
+    [2576.0, 3056.0],
+  ];
+  const DETECTOR_CONFIG = FREQS_SETS.map((base) => ({
+    base,
+    harmonicMultipliers: [1, 2, 3, 4],
+    detuneFactors: [0.99, 1, 1.01],
+  }));
+  const ENERGY_FLOOR = 1e-6; // raise a bit if your room is noisy
+  // Streaming tone detector parameters
+  const ENERGY_ON = 1.5e-3;
+  const ENERGY_OFF = 4e-4;
+  const MIN_GAP_MS = 4;
+  const IGNORE_HEAD_MS = 3;
+  const ENERGY_ENVELOPE_MS = 4;
+  const MIN_TONE_MS = 0;
+  const HP_CUTOFF_HZ = 600;
+  const INPUT_GAIN = 12;
+  const SCORE_MIN = 0.2;
+  const SCORE_MIN_BANK = FREQS_SETS.map(() => 0.3);
+  const SCORE_MIN_COMPOSITE = 0.25;
+  const COMPOSITE_BANK_INDEX = FREQS_SETS.length;
+  const COMPOSITE_LABEL = "Combo";
+  const BANK_LABEL_OVERRIDES = new Map([
+    [COMPOSITE_BANK_INDEX, COMPOSITE_LABEL],
+  ]);
+  const SAMPLE_WAV_CONFIG = [
+    { id: "sample1Btn", url: "sample.wav", label: "1" },
+    { id: "sample2Btn", url: "sample2.wav", label: "2" },
+    { id: "sample3Btn", url: "sample-clock-on-phone.wav", label: "3" },
+    {
+      id: "sample4Btn",
+      url: "sample-clock-on-phone-uncprocessed.wav",
+      label: "4",
+    },
+    { id: "sample5Btn", url: "sample-clock-on-laptop.wav", label: "5" },
+  ];
+  const CODE_BITS = 6;
+  const CRC_BITS = 8;
+  const START_CODE = 62;
+  const END_CODE = 63;
+  const START_END_MASK = (1 << CODE_BITS) - 1;
+  const END_MARK_BITS = Array.from(
+    { length: CODE_BITS },
+    (_, i) => (END_CODE >> (CODE_BITS - 1 - i)) & 1,
+  );
 
-let bankTones = [];
-// =================== CONFIG ===================
-const ENERGY_FLOOR = 1e-6; // raise a bit if your room is noisy
-// Streaming tone detector parameters
-const ENERGY_ON = 1.5e-3;
-const ENERGY_OFF = 4e-4;
-const MIN_GAP_MS = 4;
-const IGNORE_HEAD_MS = 3;
-const ENERGY_ENVELOPE_MS = 4;
-const MIN_TONE_MS = 0;
-const HP_CUTOFF_HZ = 600;
-const INPUT_GAIN = 12;
-const SCORE_MIN = 0.25;
-const SAMPLE_WAV_CONFIG = [
-  {id:'sample1Btn', url:'sample.wav', label:'1'},
-  {id:'sample2Btn', url:'sample2.wav', label:'2'},
-  {id:'sample3Btn', url:'sample-clock-on-phone.wav', label:'3'},
-];
+  const CODE_MAP = new Array(64).fill(null);
+  [
+    [0, "a"],
+    [1, "b"],
+    [2, "c"],
+    [3, "d"],
+    [4, "e"],
+    [5, "f"],
+    [6, "g"],
+    [7, "h"],
+    [8, "i"],
+    [9, "j"],
+    [10, "k"],
+    [11, "l"],
+    [12, "m"],
+    [13, "n"],
+    [14, "o"],
+    [15, "p"],
+    [16, "q"],
+    [17, "r"],
+    [18, "s"],
+    [19, "t"],
+    [20, "u"],
+    [21, "v"],
+    [22, "w"],
+    [23, "x"],
+    [24, "y"],
+    [25, "z"],
+    [26, "1"],
+    [27, "2"],
+    [28, "3"],
+    [29, "4"],
+    [30, "5"],
+    [31, "6"],
+    [32, "7"],
+    [33, "8"],
+    [34, "9"],
+    [35, " "],
+    [36, ","],
+    [37, ":"],
+    [38, "'"],
+    [39, '"'],
+  ].forEach(([code, ch]) => {
+    CODE_MAP[code] = ch;
+  });
 
-const FREQS_SETS = [
-  [2793.83, 3520.00, 4698.63, 1567.98], // Bank A (spec)
-  [2700.00, 3400.00, 4600.00, 1600.00], // Bank B (alt/tolerant)
-  [11060, 17420, 9280, 12420]
-];
-// Framing marker
-const FRAME_MARK = "333";
-const FRAME_MARK_DIGITS = FRAME_MARK.split('').map((ch) => Number(ch));
-const FRAME_MARK_LEN = FRAME_MARK_DIGITS.length;
-const CRC_TRIT_COUNT = 3;
-
-// =================== SYMBOL TABLE (prefix-free) ===================
-// Letters (2-symbol short)
-const MAP = new Map([
-  ["00","a"],["01","b"],["02","c"],["03","d"],
-  ["10","e"],["11","f"],["12","g"],["13","h"],
-  ["20","i"],["21","j"],["22","k"],["23","l"],
-
-  // m..p
-  ["300","m"],["301","n"],["302","o"],["303","p"],
-
-  // q split to 3100, r s t unchanged
-  ["3100","q"],["311","r"],["312","s"],["313","t"],
-
-  // u split to 3200, v w x unchanged
-  ["3200","u"],["321","v"],["322","w"],["323","x"],
-
-  // y split to 3300
-  ["3300","y"],
-
-  // z and punctuation
-  ["3310","z"],["3311"," "],["3312",","],["3313",":"],
-
-  // digits
-  ["332","0"],
-  ["3301","1"],["3302","2"],["3303","3"],
-  ["3201","4"],["3202","5"],["3203","6"],
-  ["3101","7"],["3102","8"],["3103","9"],
-]);
-
-// Build trie for variable-length decoding
-function buildTrie(map) {
-  const root = {};
-  for (const [code, ch] of map.entries()) {
-    let n = root;
-    for (const d of code) { n[d] = n[d] || {}; n = n[d]; }
-    n.$ = ch;
-  }
-  return root;
-}
-const TRIE = buildTrie(MAP);
-
-// CRC-5 over payload symbols (trits 0..3): additive mod 32, LE base-4 to 3 trits
-function crcSymbols(trits) {
-  let crc = 0;
-  for (const s of trits) crc = (crc + s) & 31;
-  const d0 = crc & 3, d1 = (crc >> 2) & 3, d2 = (crc >> 4) & 3;
-  return [d0, d1, d2];
-}
-
-// Decode payload trits via trie
-function decodePayloadTrits(trits) {
-  const out = [];
-  let node = TRIE;
-  for (let i = 0; i < trits.length; i++) {
-    const d = String(trits[i]);
-    if (!node[d]) return { ok:false, text:null, err:`bad code at index ${i}` };
-    node = node[d];
-    if (node.$) { out.push(node.$); node = TRIE; }
-  }
-  if (node !== TRIE) return { ok:false, text:null, err:"truncated code at end" };
-  return { ok:true, text: out.join("") };
-}
-
-function decodePayloadTritsPartial(trits) {
-  const out = [];
-  let node = TRIE;
-  let consumed = 0;
-  for (let i = 0; i < trits.length; i++) {
-    const d = String(trits[i]);
-    if (!node[d]) {
-      return { ok:false, text: out.join(""), consumed };
+  function bitsToCodes(bits, length = bits.length) {
+    const codes = [];
+    for (let offset = 0; offset + CODE_BITS <= length; offset += CODE_BITS) {
+      let value = 0;
+      for (let i = 0; i < CODE_BITS; i++) {
+        value = (value << 1) | bits[offset + i];
+      }
+      codes.push(value);
     }
-    node = node[d];
-    if (node.$) {
-      out.push(node.$);
-      consumed = i + 1;
-      node = TRIE;
-    }
+    return codes;
   }
-  return { ok:true, text: out.join(""), consumed };
-}
 
-// =================== UI helpers ===================
-const statusEl = document.getElementById('status');
-const outEl = document.getElementById('out');
-const srEl = document.getElementById('sr');
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-const DOWNLOAD_LABEL = 'Download WAV ⬇️';
-const debugMetricsEl = document.getElementById('debugMetrics');
-const freqEls = [];
-const bankStatusEls = [];
-const bankOutputEls = [];
-const sampleButtons = SAMPLE_WAV_CONFIG
-  .map(({id, url, label}) => {
+  function decodeCodes(codes) {
+    const chars = [];
+    for (let i = 0; i < codes.length; i++) {
+      const code = codes[i];
+      const ch = CODE_MAP[code];
+      if (typeof ch !== "string") {
+        return {
+          ok: false,
+          text: null,
+          err: `unsupported code ${code} at index ${i}`,
+        };
+      }
+      chars.push(ch);
+    }
+    return { ok: true, text: chars.join("") };
+  }
+
+  function crc8ATM(codes) {
+    let crc = 0x00;
+    for (const code of codes) {
+      for (let bit = CODE_BITS - 1; bit >= 0; bit--) {
+        const inputBit = (code >> bit) & 1;
+        const mix = ((crc >> 7) & 1) ^ inputBit;
+        crc = (crc << 1) & 0xff;
+        if (mix) crc ^= 0x07;
+      }
+    }
+    return crc;
+  }
+
+  function bitsToByte(bits) {
+    let value = 0;
+    for (let i = 0; i < bits.length; i++) {
+      value = (value << 1) | bits[i];
+    }
+    return value;
+  }
+
+  // =================== UI helpers ===================
+  const statusEl = document.getElementById("status");
+  const outEl = document.getElementById("out");
+  const srEl = document.getElementById("sr");
+  const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
+  const downloadBtn = document.getElementById("downloadBtn");
+  const DOWNLOAD_LABEL = "Download WAV ⬇️";
+  const debugMetricsEl = document.getElementById("debugMetrics");
+  const freqEls = [];
+  const bankStatusEls = [];
+  const bankOutputEls = [];
+  const sampleButtons = SAMPLE_WAV_CONFIG.map(({ id, url, label }) => {
     const button = document.getElementById(id);
-    return button ? {button, url, label} : null;
-  })
-  .filter(Boolean);
+    return button ? { button, url, label } : null;
+  }).filter(Boolean);
 
-// Dynamically create bank debug metrics
-function setupBankDebugMetrics(){
-  FREQS_SETS.forEach((_, idx) => {
+  // Dynamically create bank debug metrics
+  function setupBankDebugMetrics() {
+    FREQS_SETS.forEach((_, idx) => {
+      const label = bankLabel(idx);
+
+      // Create Hz metric
+      const hzMetric = document.createElement("div");
+      hzMetric.className = "debug-metric";
+      const hzLabel = document.createElement("strong");
+      hzLabel.textContent = `Bank ${label} Hz:`;
+      const hzValue = document.createElement("span");
+      hzValue.id = `freq${idx}`;
+      hzValue.textContent = "—";
+      hzMetric.append(hzLabel, " ", hzValue);
+      debugMetricsEl.append(hzMetric);
+      freqEls[idx] = hzValue;
+
+      // Create status metric
+      const statusMetric = document.createElement("div");
+      statusMetric.className = "debug-metric";
+      const statusLabel = document.createElement("strong");
+      statusLabel.textContent = `Bank ${label} status:`;
+      const statusValue = document.createElement("span");
+      statusValue.id = `bankStatus${idx}`;
+      statusValue.textContent = "—";
+      statusMetric.append(statusLabel, " ", statusValue);
+      debugMetricsEl.append(statusMetric);
+      bankStatusEls[idx] = statusValue;
+    });
+  }
+
+  function setupCompositeDebugMetrics() {
+    const idx = COMPOSITE_BANK_INDEX;
     const label = bankLabel(idx);
 
-    // Create Hz metric
-    const hzMetric = document.createElement('div');
-    hzMetric.className = 'debug-metric';
-    const hzLabel = document.createElement('strong');
+    const hzMetric = document.createElement("div");
+    hzMetric.className = "debug-metric";
+    const hzLabel = document.createElement("strong");
     hzLabel.textContent = `Bank ${label} Hz:`;
-    const hzValue = document.createElement('span');
+    const hzValue = document.createElement("span");
     hzValue.id = `freq${idx}`;
-    hzValue.textContent = '—';
-    hzMetric.append(hzLabel, ' ', hzValue);
+    hzValue.textContent = "—";
+    hzMetric.append(hzLabel, " ", hzValue);
     debugMetricsEl.append(hzMetric);
     freqEls[idx] = hzValue;
 
-    // Create status metric
-    const statusMetric = document.createElement('div');
-    statusMetric.className = 'debug-metric';
-    const statusLabel = document.createElement('strong');
+    const statusMetric = document.createElement("div");
+    statusMetric.className = "debug-metric";
+    const statusLabel = document.createElement("strong");
     statusLabel.textContent = `Bank ${label} status:`;
-    const statusValue = document.createElement('span');
+    const statusValue = document.createElement("span");
     statusValue.id = `bankStatus${idx}`;
-    statusValue.textContent = '—';
-    statusMetric.append(statusLabel, ' ', statusValue);
+    statusValue.textContent = "—";
+    statusMetric.append(statusLabel, " ", statusValue);
     debugMetricsEl.append(statusMetric);
     bankStatusEls[idx] = statusValue;
-  });
-}
-
-function setSampleButtonsDisabled(disabled){
-  for (const entry of sampleButtons) entry.button.disabled = disabled;
-}
-
-setupBankDebugMetrics();
-setupOutputContainers();
-
-let recorder = null;
-let recordedChunks = [];
-let recordedWavBlob = null;
-
-function clearRecording(){
-  recordedWavBlob = null;
-  recordedChunks = [];
-  downloadBtn.disabled = true;
-  downloadBtn.textContent = DOWNLOAD_LABEL;
-}
-
-if (typeof MediaRecorder === 'undefined') {
-  downloadBtn.disabled = true;
-  downloadBtn.title = 'Recording download requires MediaRecorder support.';
-}
-
-function setStatus(s){ statusEl.textContent = s; }
-function bankLabel(idx){
-  if (idx >= 0 && idx < 26) return String.fromCharCode(65 + idx);
-  return String(idx + 1);
-}
-
-function setupOutputContainers(){
-  outEl.textContent = '';
-  FREQS_SETS.forEach((_, idx) => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'out-bank';
-    const title = document.createElement('div');
-    title.className = 'out-bank-title';
-    title.textContent = `Bank ${bankLabel(idx)}`;
-    const body = document.createElement('div');
-    body.className = 'out-bank-body';
-    wrapper.append(title, body);
-    outEl.append(wrapper);
-    bankOutputEls[idx] = body;
-  });
-}
-
-function appendResult(bank, text){
-  if (!text) return;
-  const target = bankOutputEls[bank];
-  if (!target) return;
-  const span = document.createElement('span');
-  span.className = 'decoded-ok';
-  span.textContent = text;
-  target.append(span);
-}
-function formatFreq(f){
-  const txt = f.toFixed(1);
-  return (txt.endsWith('.0') ? txt.slice(0, -2) : txt) + ' Hz';
-}
-function resetFreqDisplays(){ for (const el of freqEls) if (el) el.textContent = '—'; }
-function resetBankStatuses(){ for (const el of bankStatusEls) if (el) el.textContent = '—'; }
-function setBankStatus(bank, text){
-  const el = bankStatusEls[bank];
-  if (el) el.textContent = text;
-}
-
-resetFreqDisplays();
-resetBankStatuses();
-
-function getRecorderMimeType(){
-  if (typeof MediaRecorder === 'undefined') return null;
-  const preferred = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/ogg;codecs=opus'
-  ];
-  for (const type of preferred) {
-    if (MediaRecorder.isTypeSupported?.(type)) return type;
   }
-  return null;
-}
 
-function setupRecorder(stream){
-  if (typeof MediaRecorder === 'undefined') return;
-  const type = getRecorderMimeType();
-  const options = type ? {mimeType:type} : undefined;
-  try {
-    recorder = new MediaRecorder(stream, options);
-  } catch (err) {
-    console.warn('MediaRecorder unavailable', err);
-    recorder = null;
-    return;
+  function setSampleButtonsDisabled(disabled) {
+    for (const entry of sampleButtons) entry.button.disabled = disabled;
   }
-  recordedChunks = [];
-  recorder.addEventListener('dataavailable', e => {
-    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-  });
-  try {
-    recorder.start();
-  } catch (err) {
-    console.warn('MediaRecorder start failed', err);
-    recorder = null;
-  }
-}
 
-async function stopRecording({finalize=true}={}){
-  if (!recorder) {
-    if (!finalize) recordedChunks = [];
-    return {hadError:false};
-  }
-  if (recorder.state === 'inactive') {
-    recorder = null;
-    if (!finalize) recordedChunks = [];
-    return {hadError:false};
-  }
-  const rec = recorder;
-  return new Promise(resolve => {
-    let settled = false;
-    const finish = (hadError) => {
-      if (settled) return;
-      settled = true;
-      recorder = null;
-      recordedChunks = [];
-      resolve({hadError});
-    };
-    rec.addEventListener('stop', async () => {
-      let hadError = false;
-      try {
-        if (finalize && recordedChunks.length) {
-          const blob = new Blob(recordedChunks, {type: rec.mimeType || 'audio/webm'});
-          await prepareDownload(blob);
-        } else if (finalize) {
-          clearRecording();
-        } else {
-          recordedChunks = [];
-        }
-      } catch (err) {
-        console.error('Failed to prepare recording', err);
-        clearRecording();
-        hadError = true;
-      } finally {
-        finish(hadError);
-      }
-    }, {once:true});
-    try {
-      rec.stop();
-    } catch (err) {
-      console.warn('MediaRecorder stop failed', err);
-      if (finalize) clearRecording(); else recordedChunks = [];
-      finish(true);
-    }
-  });
-}
+  setupBankDebugMetrics();
+  setupCompositeDebugMetrics();
+  setupOutputContainers();
 
-async function prepareDownload(blob){
-  if (!blob || blob.size === 0) {
-    clearRecording();
-    return;
-  }
-  downloadBtn.disabled = true;
-  downloadBtn.textContent = 'Preparing WAV…';
-  try {
-    const wavBlob = await convertBlobToWav(blob);
-    recordedWavBlob = wavBlob;
-    downloadBtn.disabled = false;
-  } catch (err) {
-    console.error('Unable to convert recording', err);
-    clearRecording();
-    setStatus('error preparing WAV');
-  } finally {
+  let recorder = null;
+  let recordedChunks = [];
+  let recordedWavBlob = null;
+
+  function clearRecording() {
+    recordedWavBlob = null;
+    recordedChunks = [];
+    downloadBtn.disabled = true;
     downloadBtn.textContent = DOWNLOAD_LABEL;
   }
-}
 
-async function convertBlobToWav(blob){
-  const arrayBuffer = await blob.arrayBuffer();
-  const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
-  try {
-    const audioBuffer = await new Promise((resolve, reject) => {
-      tmpCtx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+  if (typeof MediaRecorder === "undefined") {
+    downloadBtn.disabled = true;
+    downloadBtn.title = "Recording download requires MediaRecorder support.";
+  }
+
+  function setStatus(s) {
+    statusEl.textContent = s;
+  }
+  function bankLabel(idx) {
+    if (BANK_LABEL_OVERRIDES.has(idx)) return BANK_LABEL_OVERRIDES.get(idx);
+    if (idx >= 0 && idx < 26) return String.fromCharCode(65 + idx);
+    return String(idx + 1);
+  }
+
+  function setupOutputContainers() {
+    outEl.textContent = "";
+    FREQS_SETS.forEach((_, idx) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "out-bank";
+      const title = document.createElement("div");
+      title.className = "out-bank-title";
+      title.textContent = `Bank ${bankLabel(idx)}`;
+      const body = document.createElement("div");
+      body.className = "out-bank-body";
+      wrapper.append(title, body);
+      outEl.append(wrapper);
+      bankOutputEls[idx] = body;
     });
-    const wavBuffer = audioBufferToWav(audioBuffer);
-    return new Blob([wavBuffer], {type:'audio/wav'});
-  } finally {
-    try { await tmpCtx.close(); } catch (_) {}
-  }
-}
 
-function audioBufferToWav(buffer){
-  const numChannels = buffer.numberOfChannels || 1;
-  const sampleRate = buffer.sampleRate;
-  const numFrames = buffer.length;
-  const bytesPerSample = 2;
-  const blockAlign = numChannels * bytesPerSample;
-  const byteRate = sampleRate * blockAlign;
-  const dataSize = numFrames * blockAlign;
-  const arrayBuffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(arrayBuffer);
-  let offset = 0;
-
-  function writeString(str){
-    for (let i = 0; i < str.length; i++) view.setUint8(offset++, str.charCodeAt(i));
+    const compWrapper = document.createElement("div");
+    compWrapper.className = "out-bank";
+    const compTitle = document.createElement("div");
+    compTitle.className = "out-bank-title";
+    compTitle.textContent = `Bank ${bankLabel(COMPOSITE_BANK_INDEX)}`;
+    const compBody = document.createElement("div");
+    compBody.className = "out-bank-body";
+    compWrapper.append(compTitle, compBody);
+    outEl.append(compWrapper);
+    bankOutputEls[COMPOSITE_BANK_INDEX] = compBody;
   }
 
-  writeString('RIFF');
-  view.setUint32(offset, 36 + dataSize, true); offset += 4;
-  writeString('WAVE');
-  writeString('fmt ');
-  view.setUint32(offset, 16, true); offset += 4;
-  view.setUint16(offset, 1, true); offset += 2;
-  view.setUint16(offset, numChannels, true); offset += 2;
-  view.setUint32(offset, sampleRate, true); offset += 4;
-  view.setUint32(offset, byteRate, true); offset += 4;
-  view.setUint16(offset, blockAlign, true); offset += 2;
-  view.setUint16(offset, bytesPerSample * 8, true); offset += 2;
-  writeString('data');
-  view.setUint32(offset, dataSize, true); offset += 4;
+  function appendResult(bank, text) {
+    if (!text) return;
+    const target = bankOutputEls[bank];
+    if (!target) return;
+    const span = document.createElement("span");
+    span.className = "decoded-ok";
+    span.textContent = text;
+    target.append(span);
+  }
+  function formatFreq(f) {
+    const txt = f.toFixed(1);
+    return (txt.endsWith(".0") ? txt.slice(0, -2) : txt) + " Hz";
+  }
+  function resetFreqDisplays() {
+    for (const el of freqEls) if (el) el.textContent = "—";
+  }
+  function resetBankStatuses() {
+    for (const el of bankStatusEls) if (el) el.textContent = "—";
+  }
+  function setBankStatus(bank, text) {
+    const el = bankStatusEls[bank];
+    if (el) el.textContent = text;
+  }
 
-  const channels = [];
-  for (let ch = 0; ch < numChannels; ch++) channels.push(buffer.getChannelData(ch));
-  for (let i = 0; i < numFrames; i++) {
-    for (let ch = 0; ch < numChannels; ch++) {
-      let sample = channels[ch][i] || 0;
-      sample = Math.max(-1, Math.min(1, sample));
-      const intSample = sample < 0 ? Math.round(sample * 0x8000) : Math.round(sample * 0x7FFF);
-      view.setInt16(offset, intSample, true);
-      offset += 2;
-    }
-  }
-  return arrayBuffer;
-}
-
-// =================== Dual decoder state ===================
-function mkDec(bank) {
-  return {
-    state: 'idle',
-    frameTrits: [],
-    scores: [],
-    startMatch: 0,
-    markerBuf: [],
-    markerScores: [],
-    previewNode: null,
-    previewText: '',
-    previewConsumed: 0,
-    bank,
-  };
-}
-const DEC = FREQS_SETS.map((_, bank) => mkDec(bank));
-
-function ensurePreview(dec) {
-  if (dec.previewNode) return;
-  const target = bankOutputEls[dec.bank];
-  if (!target) return;
-  const span = document.createElement('span');
-  span.className = 'provisional';
-  dec.previewNode = span;
-  dec.previewText = '';
-  dec.previewConsumed = 0;
-  target.append(span);
-}
-
-function updatePreview(dec) {
-  if (!dec.frameTrits.length) return;
-  const res = decodePayloadTritsPartial(dec.frameTrits);
-  if (!res.ok) return;
-  const {text, consumed} = res;
-  if (consumed <= dec.previewConsumed) return;
-  ensurePreview(dec);
-  const newText = text.slice(dec.previewText.length);
-  if (newText) {
-    dec.previewText += newText;
-    dec.previewNode.textContent = dec.previewText;
-  }
-  dec.previewConsumed = consumed;
-}
-
-function commitPreview(dec, result) {
-  const shouldKeep = result.ok && result.okCRC && result.text;
-  if (dec.previewNode) {
-    if (shouldKeep) {
-      dec.previewNode.classList.remove('provisional');
-      dec.previewNode.classList.add('decoded-ok');
-      dec.previewNode.textContent = result.text;
-    } else {
-      dec.previewNode.remove();
-    }
-    dec.previewNode = null;
-  } else if (shouldKeep) {
-    appendResult(dec.bank, result.text);
-  }
-  dec.previewText = '';
-  dec.previewConsumed = 0;
-}
-
-function resetDec(d){
-  d.state = 'idle';
-  d.frameTrits.length = 0;
-  d.scores.length = 0;
-  d.startMatch = 0;
-  d.markerBuf.length = 0;
-  d.markerScores.length = 0;
-  if (d.previewNode) {
-    d.previewNode.remove();
-    d.previewNode = null;
-  }
-  d.previewText = '';
-  d.previewConsumed = 0;
-}
-function resetAllDecoders(){ for (const d of DEC) resetDec(d); }
-
-async function cleanup(nextStatus, opts={}){
-  const {skipRecorderStop = false} = opts;
-  if (!skipRecorderStop) {
-    await stopRecording({finalize:false});
-  }
-  if (bufferSrc) {
-    bufferSrc.onended = null;
-    try { bufferSrc.stop(); } catch (_) {}
-    try { bufferSrc.disconnect(); } catch (_) {}
-    bufferSrc = null;
-  }
-  if (workletNode) {
-    workletNode.port.onmessage = null;
-    try { workletNode.disconnect(); } catch (_) {}
-    workletNode = null;
-  }
-  if (inputGainNode) {
-    try { inputGainNode.disconnect(); } catch (_) {}
-    inputGainNode = null;
-  }
-  if (mediaSrc) {
-    try { mediaSrc.disconnect(); } catch (_) {}
-    mediaSrc = null;
-  }
-  if (mediaStream) {
-    for (const track of mediaStream.getTracks()) track.stop();
-    mediaStream = null;
-  }
-  if (audioCtx) {
-    try { await audioCtx.close(); } catch (_) {}
-    audioCtx = null;
-  }
-  srEl.textContent = '—';
-  resetAllDecoders();
   resetFreqDisplays();
   resetBankStatuses();
-  suppressReadyStatus = false;
-  if (typeof nextStatus === 'string') setStatus(nextStatus);
-}
 
-async function initProcessingChain(){
-  resetAllDecoders();
-  resetFreqDisplays();
-  resetBankStatuses();
-  setStatus('initializing audio…');
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
-  srEl.textContent = audioCtx.sampleRate.toFixed(0) + ' Hz';
-  const workletModuleUrl = new URL('./mb-fesk-worklet.js', import.meta.url);
-  await audioCtx.audioWorklet.addModule(workletModuleUrl);
-  workletNode = new AudioWorkletNode(audioCtx, 'mb-fesk', {numberOfInputs:1, numberOfOutputs:0});
-  inputGainNode = audioCtx.createGain();
-  inputGainNode.gain.value = INPUT_GAIN;
-  inputGainNode.connect(workletNode);
-  workletNode.port.onmessage = (e)=>{
-    const m = e.data;
-    if (m.t==='ready') {
-      if (!suppressReadyStatus) setStatus('ready');
-    }
-    else if (m.t==='candidates') handleCandidates(m.results);
-  };
-  workletNode.port.postMessage({
-    freqSets: FREQS_SETS,
-    energyFloor: ENERGY_FLOOR,
-    energyOn: ENERGY_ON,
-    energyOff: ENERGY_OFF,
-    minToneMs: MIN_TONE_MS,
-    minGapMs: MIN_GAP_MS,
-    ignoreHeadMs: IGNORE_HEAD_MS,
-    envelopeMs: ENERGY_ENVELOPE_MS,
-    hpCutoffHz: HP_CUTOFF_HZ,
-  });
-  return workletNode;
-}
-
-function feedOne(dec, symIdx, score) {
-  const s = score ?? 0;
-
-  // Hunt for the start marker while idle.
-  if (dec.state === 'idle') {
-    if (symIdx === FRAME_MARK_DIGITS[dec.startMatch]) {
-      dec.startMatch += 1;
-      if (dec.startMatch === FRAME_MARK_LEN) {
-        dec.state = 'payload';
-        dec.frameTrits.length = 0;
-        dec.scores.length = 0;
-        dec.markerBuf.length = 0;
-        dec.markerScores.length = 0;
-        dec.startMatch = 0;
-      }
-    } else {
-      dec.startMatch = symIdx === FRAME_MARK_DIGITS[0] ? 1 : 0;
+  function getRecorderMimeType() {
+    if (typeof MediaRecorder === "undefined") return null;
+    const preferred = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+    ];
+    for (const type of preferred) {
+      if (MediaRecorder.isTypeSupported?.(type)) return type;
     }
     return null;
   }
 
-  if (dec.state !== 'payload') return null;
-
-  // Track potential end marker without committing to payload until confirmed.
-  dec.markerBuf.push(symIdx);
-  dec.markerScores.push(s);
-
-  while (dec.markerBuf.length) {
-    let matchesPrefix = true;
-    for (let i = 0; i < dec.markerBuf.length; i += 1) {
-      if (dec.markerBuf[i] !== FRAME_MARK_DIGITS[i]) {
-        matchesPrefix = false;
-        break;
-      }
+  function setupRecorder(stream) {
+    if (typeof MediaRecorder === "undefined") return;
+    const type = getRecorderMimeType();
+    const options = type ? { mimeType: type } : undefined;
+    try {
+      recorder = new MediaRecorder(stream, options);
+    } catch (err) {
+      console.warn("MediaRecorder unavailable", err);
+      recorder = null;
+      return;
     }
-    if (matchesPrefix) break;
-
-    const flushed = dec.markerBuf.shift();
-    const flushedScore = dec.markerScores.shift();
-    dec.frameTrits.push(flushed);
-    dec.scores.push(flushedScore);
-    updatePreview(dec);
+    recordedChunks = [];
+    recorder.addEventListener("dataavailable", (e) => {
+      if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+    });
+    try {
+      recorder.start();
+    } catch (err) {
+      console.warn("MediaRecorder start failed", err);
+      recorder = null;
+    }
   }
 
-  if (dec.markerBuf.length === FRAME_MARK_LEN) {
-    // Found end marker: validate collected frame.
-    if (dec.frameTrits.length < CRC_TRIT_COUNT) {
-      const r = {ok:false, okCRC:false, why:'short'};
-      commitPreview(dec, r);
-      resetDec(dec);
-      return r;
+  async function stopRecording({ finalize = true } = {}) {
+    if (!recorder) {
+      if (!finalize) recordedChunks = [];
+      return { hadError: false };
+    }
+    if (recorder.state === "inactive") {
+      recorder = null;
+      if (!finalize) recordedChunks = [];
+      return { hadError: false };
+    }
+    const rec = recorder;
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (hadError) => {
+        if (settled) return;
+        settled = true;
+        recorder = null;
+        recordedChunks = [];
+        resolve({ hadError });
+      };
+      rec.addEventListener(
+        "stop",
+        async () => {
+          let hadError = false;
+          try {
+            if (finalize && recordedChunks.length) {
+              const blob = new Blob(recordedChunks, {
+                type: rec.mimeType || "audio/webm",
+              });
+              await prepareDownload(blob);
+            } else if (finalize) {
+              clearRecording();
+            } else {
+              recordedChunks = [];
+            }
+          } catch (err) {
+            console.error("Failed to prepare recording", err);
+            clearRecording();
+            hadError = true;
+          } finally {
+            finish(hadError);
+          }
+        },
+        { once: true },
+      );
+      try {
+        rec.stop();
+      } catch (err) {
+        console.warn("MediaRecorder stop failed", err);
+        if (finalize) clearRecording();
+        else recordedChunks = [];
+        finish(true);
+      }
+    });
+  }
+
+  async function prepareDownload(blob) {
+    if (!blob || blob.size === 0) {
+      clearRecording();
+      return;
+    }
+    downloadBtn.disabled = true;
+    downloadBtn.textContent = "Preparing WAV…";
+    try {
+      const wavBlob = await convertBlobToWav(blob);
+      recordedWavBlob = wavBlob;
+      downloadBtn.disabled = false;
+    } catch (err) {
+      console.error("Unable to convert recording", err);
+      clearRecording();
+      setStatus("error preparing WAV");
+    } finally {
+      downloadBtn.textContent = DOWNLOAD_LABEL;
+    }
+  }
+
+  async function convertBlobToWav(blob) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      const audioBuffer = await new Promise((resolve, reject) => {
+        tmpCtx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+      });
+      const wavBuffer = audioBufferToWav(audioBuffer);
+      return new Blob([wavBuffer], { type: "audio/wav" });
+    } finally {
+      try {
+        await tmpCtx.close();
+      } catch (_) {}
+    }
+  }
+
+  function audioBufferToWav(buffer) {
+    const numChannels = buffer.numberOfChannels || 1;
+    const sampleRate = buffer.sampleRate;
+    const numFrames = buffer.length;
+    const bytesPerSample = 2;
+    const blockAlign = numChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = numFrames * blockAlign;
+    const arrayBuffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(arrayBuffer);
+    let offset = 0;
+
+    function writeString(str) {
+      for (let i = 0; i < str.length; i++)
+        view.setUint8(offset++, str.charCodeAt(i));
     }
 
-    const recvCRC = dec.frameTrits.slice(-CRC_TRIT_COUNT);
-    const payload = dec.frameTrits.slice(0, -CRC_TRIT_COUNT);
-    const wantCRC = crcSymbols(payload);
-    const okCRC = (
-      recvCRC[0] === wantCRC[0] &&
-      recvCRC[1] === wantCRC[1] &&
-      recvCRC[2] === wantCRC[2]
+    writeString("RIFF");
+    view.setUint32(offset, 36 + dataSize, true);
+    offset += 4;
+    writeString("WAVE");
+    writeString("fmt ");
+    view.setUint32(offset, 16, true);
+    offset += 4;
+    view.setUint16(offset, 1, true);
+    offset += 2;
+    view.setUint16(offset, numChannels, true);
+    offset += 2;
+    view.setUint32(offset, sampleRate, true);
+    offset += 4;
+    view.setUint32(offset, byteRate, true);
+    offset += 4;
+    view.setUint16(offset, blockAlign, true);
+    offset += 2;
+    view.setUint16(offset, bytesPerSample * 8, true);
+    offset += 2;
+    writeString("data");
+    view.setUint32(offset, dataSize, true);
+    offset += 4;
+
+    const channels = [];
+    for (let ch = 0; ch < numChannels; ch++)
+      channels.push(buffer.getChannelData(ch));
+    for (let i = 0; i < numFrames; i++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        let sample = channels[ch][i] || 0;
+        sample = Math.max(-1, Math.min(1, sample));
+        const intSample =
+          sample < 0
+            ? Math.round(sample * 0x8000)
+            : Math.round(sample * 0x7fff);
+        view.setInt16(offset, intSample, true);
+        offset += 2;
+      }
+    }
+    return arrayBuffer;
+  }
+
+  // =================== Dual decoder state ===================
+  function mkDec(bank) {
+    return {
+      state: "hunt",
+      frameBits: [],
+      bitScores: [],
+      markerBits: [],
+      markerScores: [],
+      recentBits: 0,
+      recentCount: 0,
+      previewNode: null,
+      previewText: "",
+      previewConsumedBits: 0,
+      bank,
+    };
+  }
+  const DEC = FREQS_SETS.map((_, bank) => mkDec(bank));
+  DEC[COMPOSITE_BANK_INDEX] = mkDec(COMPOSITE_BANK_INDEX);
+
+  function ensurePreview(dec) {
+    if (dec.previewNode) return;
+    const target = bankOutputEls[dec.bank];
+    if (!target) return;
+    const span = document.createElement("span");
+    span.className = "provisional";
+    dec.previewNode = span;
+    dec.previewText = "";
+    dec.previewConsumedBits = 0;
+    target.append(span);
+  }
+
+  function updatePreview(dec) {
+    if (!dec.frameBits.length) return;
+    const usableBits =
+      dec.frameBits.length - (dec.frameBits.length % CODE_BITS);
+    if (!usableBits || usableBits <= dec.previewConsumedBits) return;
+    const codes = bitsToCodes(dec.frameBits, usableBits);
+    const res = decodeCodes(codes);
+    if (!res.ok) return;
+    ensurePreview(dec);
+    const text = res.text;
+    const newText = text.slice(dec.previewText.length);
+    if (newText) {
+      dec.previewText += newText;
+      dec.previewNode.textContent = dec.previewText;
+    }
+    dec.previewConsumedBits = usableBits;
+  }
+
+  function commitPreview(dec, result) {
+    const shouldKeep = result.ok && result.okCRC && result.text;
+    if (dec.previewNode) {
+      if (shouldKeep) {
+        dec.previewNode.classList.remove("provisional");
+        dec.previewNode.classList.add("decoded-ok");
+        dec.previewNode.textContent = result.text;
+      } else {
+        dec.previewNode.remove();
+      }
+      dec.previewNode = null;
+    } else if (shouldKeep) {
+      appendResult(dec.bank, result.text);
+    }
+    dec.previewText = "";
+    dec.previewConsumedBits = 0;
+  }
+
+  function resetDec(d) {
+    d.state = "hunt";
+    d.frameBits.length = 0;
+    d.bitScores.length = 0;
+    d.markerBits.length = 0;
+    d.markerScores.length = 0;
+    d.recentBits = 0;
+    d.recentCount = 0;
+    if (d.previewNode) {
+      d.previewNode.remove();
+      d.previewNode = null;
+    }
+    d.previewText = "";
+    d.previewConsumedBits = 0;
+  }
+  function resetAllDecoders() {
+    for (const d of DEC) resetDec(d);
+  }
+
+  async function cleanup(nextStatus, opts = {}) {
+    const { skipRecorderStop = false } = opts;
+    if (!skipRecorderStop) {
+      await stopRecording({ finalize: false });
+    }
+    if (bufferSrc) {
+      bufferSrc.onended = null;
+      try {
+        bufferSrc.stop();
+      } catch (_) {}
+      try {
+        bufferSrc.disconnect();
+      } catch (_) {}
+      bufferSrc = null;
+    }
+    if (workletNode) {
+      workletNode.port.onmessage = null;
+      try {
+        workletNode.disconnect();
+      } catch (_) {}
+      workletNode = null;
+    }
+    if (inputGainNode) {
+      try {
+        inputGainNode.disconnect();
+      } catch (_) {}
+      inputGainNode = null;
+    }
+    if (mediaSrc) {
+      try {
+        mediaSrc.disconnect();
+      } catch (_) {}
+      mediaSrc = null;
+    }
+    if (mediaStream) {
+      for (const track of mediaStream.getTracks()) track.stop();
+      mediaStream = null;
+    }
+    if (audioCtx) {
+      try {
+        await audioCtx.close();
+      } catch (_) {}
+      audioCtx = null;
+    }
+    srEl.textContent = "—";
+    resetAllDecoders();
+    resetFreqDisplays();
+    resetBankStatuses();
+    suppressReadyStatus = false;
+    if (typeof nextStatus === "string") setStatus(nextStatus);
+  }
+
+  async function initProcessingChain() {
+    resetAllDecoders();
+    resetFreqDisplays();
+    resetBankStatuses();
+    setStatus("initializing audio…");
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+      latencyHint: "interactive",
+    });
+    srEl.textContent = audioCtx.sampleRate.toFixed(0) + " Hz";
+    const workletModuleUrl = new URL("./mb-fesk-worklet.js", import.meta.url);
+    await audioCtx.audioWorklet.addModule(workletModuleUrl);
+    workletNode = new AudioWorkletNode(audioCtx, "mb-fesk", {
+      numberOfInputs: 1,
+      numberOfOutputs: 0,
+    });
+    inputGainNode = audioCtx.createGain();
+    inputGainNode.gain.value = INPUT_GAIN;
+    inputGainNode.connect(workletNode);
+    workletNode.port.onmessage = (e) => {
+      const m = e.data;
+      if (m.t === "ready") {
+        if (!suppressReadyStatus) setStatus("ready");
+      } else if (m.t === "candidates") handleCandidates(m.results);
+    };
+    workletNode.port.postMessage({
+      freqSets: DETECTOR_CONFIG,
+      energyFloor: ENERGY_FLOOR,
+      energyOn: ENERGY_ON,
+      energyOff: ENERGY_OFF,
+      minToneMs: MIN_TONE_MS,
+      minGapMs: MIN_GAP_MS,
+      ignoreHeadMs: IGNORE_HEAD_MS,
+      envelopeMs: ENERGY_ENVELOPE_MS,
+      hpCutoffHz: HP_CUTOFF_HZ,
+    });
+    return workletNode;
+  }
+
+  function finalizeFrame(dec) {
+    const totalBits = dec.frameBits.length;
+    if (totalBits < CRC_BITS) {
+      const r = {
+        ok: false,
+        okCRC: false,
+        text: null,
+        avgScore: 0,
+        why: "short",
+      };
+      commitPreview(dec, r);
+      return r;
+    }
+    const payloadBitLength = totalBits - CRC_BITS;
+    if (payloadBitLength < 0 || payloadBitLength % CODE_BITS !== 0) {
+      const r = {
+        ok: false,
+        okCRC: false,
+        text: null,
+        avgScore: 0,
+        why: "misaligned",
+      };
+      commitPreview(dec, r);
+      return r;
+    }
+    const payloadCodes = bitsToCodes(dec.frameBits, payloadBitLength);
+    const recvCrc = bitsToByte(
+      dec.frameBits.slice(payloadBitLength, payloadBitLength + CRC_BITS),
     );
+    const wantCrc = crc8ATM(payloadCodes);
+    const okCRC = recvCrc === wantCrc;
 
     let ok = false;
     let text = null;
     if (okCRC) {
-      const res = decodePayloadTrits(payload);
+      const res = decodeCodes(payloadCodes);
       ok = res.ok;
       text = res.text;
     }
 
-    const avgScore = dec.scores.length
-      ? dec.scores.reduce((a, b) => a + b, 0) / dec.scores.length
+    const payloadScores = dec.bitScores.slice(0, payloadBitLength);
+    const avgScore = payloadScores.length
+      ? payloadScores.reduce((a, b) => a + b, 0) / payloadScores.length
       : 0;
 
-    const result = {ok, okCRC, text, avgScore};
+    dec.markerBits.length = 0;
+    dec.markerScores.length = 0;
+
+    const result = { ok, okCRC, text, avgScore };
     commitPreview(dec, result);
-    resetDec(dec);
     return result;
   }
 
-  return null;
-}
+  function feedOne(dec, symIdx, score) {
+    const s = score ?? 0;
+    if (symIdx !== 0 && symIdx !== 1) return null;
+    const bit = symIdx & 1;
 
-// =================== Boot & wire-up ===================
-let audioCtx = null;
-let mediaStream = null;
-let mediaSrc = null;
-let workletNode = null;
-let bufferSrc = null;
-let inputGainNode = null;
-let suppressReadyStatus = false;
+    if (dec.state === "hunt") {
+      dec.recentBits = ((dec.recentBits << 1) | bit) & START_END_MASK;
+      dec.recentCount = Math.min(dec.recentCount + 1, CODE_BITS);
+      if (dec.recentCount === CODE_BITS && dec.recentBits === START_CODE) {
+        dec.state = "payload";
+        dec.frameBits.length = 0;
+        dec.bitScores.length = 0;
+        dec.previewText = "";
+        dec.previewConsumedBits = 0;
+        if (dec.previewNode) {
+          dec.previewNode.remove();
+          dec.previewNode = null;
+        }
+        dec.recentBits = 0;
+        dec.recentCount = 0;
+      }
+      return null;
+    }
 
-startBtn.addEventListener('click', async () => {
-  startBtn.disabled = true;
-  stopBtn.disabled = true;
-  setSampleButtonsDisabled(true);
-  try {
-    await cleanup(null);
-    await initProcessingChain();
-    setStatus('requesting microphone…');
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false, channelCount:1 }
-    });
-    mediaSrc = audioCtx.createMediaStreamSource(mediaStream);
-    if (inputGainNode) mediaSrc.connect(inputGainNode);
-    clearRecording();
-    setupRecorder(mediaStream);
-    setStatus('listening… wait for 333 start marker');
-    stopBtn.disabled = false;
-  } catch (err) {
-    setStatus('error: ' + (err && err.message || err));
-    await cleanup(null);
-    startBtn.disabled = false;
-    setSampleButtonsDisabled(false);
+    if (dec.state !== "payload") return null;
+
+    dec.markerBits.push(bit);
+    dec.markerScores.push(s);
+
+    let flushedAny = false;
+    while (dec.markerBits.length) {
+      let matchesPrefix = true;
+      for (let i = 0; i < dec.markerBits.length; i += 1) {
+        if (dec.markerBits[i] !== END_MARK_BITS[i]) {
+          matchesPrefix = false;
+          break;
+        }
+      }
+      if (matchesPrefix) break;
+      const flushed = dec.markerBits.shift();
+      const flushedScore = dec.markerScores.shift();
+      dec.frameBits.push(flushed);
+      dec.bitScores.push(flushedScore);
+      updatePreview(dec);
+      flushedAny = true;
+    }
+
+    while (dec.markerBits.length >= CODE_BITS) {
+      const totalBits = dec.frameBits.length;
+      const payloadBitLength = totalBits - CRC_BITS;
+      if (payloadBitLength < 0 || payloadBitLength % CODE_BITS !== 0) {
+        const flushed = dec.markerBits.shift();
+        const flushedScore = dec.markerScores.shift();
+        dec.frameBits.push(flushed);
+        dec.bitScores.push(flushedScore);
+        updatePreview(dec);
+        continue;
+      }
+      const result = finalizeFrame(dec);
+      resetDec(dec);
+      return result;
+    }
+
+    dec.recentBits = ((dec.recentBits << 1) | bit) & START_END_MASK;
+    dec.recentCount = Math.min(dec.recentCount + 1, CODE_BITS);
+
+    if (!dec.markerBits.length && !flushedAny) updatePreview(dec);
+    return null;
+  }
+
+  // =================== Boot & wire-up ===================
+  let audioCtx = null;
+  let mediaStream = null;
+  let mediaSrc = null;
+  let workletNode = null;
+  let bufferSrc = null;
+  let inputGainNode = null;
+  let suppressReadyStatus = false;
+
+  startBtn.addEventListener("click", async () => {
+    startBtn.disabled = true;
     stopBtn.disabled = true;
-  }
-});
-
-function logTones(){
-  bankTones.forEach((tones, i) => {
-    const label = bankLabel(i);
-    console.log(`Bank ${label} tones: ${tones.join(' ')}`);
-  });
-  bankTones = [];
-}
-
-stopBtn.addEventListener('click', async () => {
-  stopBtn.disabled = true;
-  try {
-    const result = await stopRecording({finalize:true});
-    await cleanup(result && result.hadError ? undefined : 'stopped', {skipRecorderStop:true});
-  } finally {
-    startBtn.disabled = false;
-    setSampleButtonsDisabled(false);
-  }
-  logTones();
-});
-
-for (const entry of sampleButtons) {
-  entry.button.addEventListener('click', async () => {
-    await playSample(entry);
-  });
-}
-
-async function playSample(entry){
-  const {url, label} = entry;
-  startBtn.disabled = true;
-  setSampleButtonsDisabled(true);
-  stopBtn.disabled = true;
-  try {
-    await cleanup(null);
-    suppressReadyStatus = true;
-    await initProcessingChain();
-    const labelSuffix = label ? ` ${label}` : '';
-    setStatus(`loading sample${labelSuffix}…`);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`fetch failed (${response.status})`);
-    const arrayBuffer = await response.arrayBuffer();
-    const audioBuffer = await new Promise((resolve, reject) => {
-      audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
-    });
-    if (!audioBuffer || audioBuffer.numberOfChannels === 0) {
-      throw new Error('empty or unsupported WAV payload');
-    }
-    let playbackBuffer = audioBuffer;
-    if (audioBuffer.numberOfChannels > 1) {
-      const length = audioBuffer.length;
-      const mono = audioCtx.createBuffer(1, length, audioBuffer.sampleRate);
-      const out = mono.getChannelData(0);
-      for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
-        const data = audioBuffer.getChannelData(ch);
-        for (let i = 0; i < length; i++) out[i] += data[i];
-      }
-      for (let i = 0; i < out.length; i++) out[i] /= audioBuffer.numberOfChannels;
-      playbackBuffer = mono;
-    }
-    bufferSrc = audioCtx.createBufferSource();
-    bufferSrc.buffer = playbackBuffer;
-    bufferSrc.connect(workletNode);
-    bufferSrc.start();
-    bufferSrc.onended = async () => {
-      const finished = bufferSrc;
-      if (finished) {
-        finished.onended = null;
-        try { finished.disconnect(); } catch (_) {}
-      }
-      bufferSrc = null;
-      stopBtn.disabled = true;
-      await cleanup('sample finished');
-      logTones();
+    setSampleButtonsDisabled(true);
+    try {
+      await cleanup(null);
+      await initProcessingChain();
+      setStatus("requesting microphone…");
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1,
+        },
+      });
+      mediaSrc = audioCtx.createMediaStreamSource(mediaStream);
+      if (inputGainNode) mediaSrc.connect(inputGainNode);
+      clearRecording();
+      setupRecorder(mediaStream);
+      setStatus("listening… wait for 111110 start marker");
+      stopBtn.disabled = false;
+    } catch (err) {
+      setStatus("error: " + ((err && err.message) || err));
+      await cleanup(null);
       startBtn.disabled = false;
       setSampleButtonsDisabled(false);
-    };
-    setStatus(`playing sample${labelSuffix}…`);
-    stopBtn.disabled = false;
-  } catch (err) {
-    setStatus('error: ' + (err && err.message || err));
-    await cleanup(null);
-    startBtn.disabled = false;
-    setSampleButtonsDisabled(false);
-    stopBtn.disabled = true;
-  }
-}
-
-downloadBtn.addEventListener('click', () => {
-  if (!recordedWavBlob) return;
-  const url = URL.createObjectURL(recordedWavBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  a.download = `fesk-recording-${stamp}.wav`;
-  document.body.appendChild(a);
-  a.click();
-  requestAnimationFrame(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      stopBtn.disabled = true;
+    }
   });
-});
 
-// Handle candidates from both banks
-function handleCandidates(results){
-  const activeBanks = new Array(freqEls.length).fill(false);
-  // For each active bank candidate, feed its decoder
-  for (const r of results) {
-    if (!r.active) continue;
-    if ((r.score ?? 0) < SCORE_MIN) continue;
-    if (freqEls[r.bank]) {
-      freqEls[r.bank].textContent = formatFreq(FREQS_SETS[r.bank][r.idx]);
-      activeBanks[r.bank] = true;
+  function logTones() {
+    bankTones.forEach((tones, i) => {
+      const label = bankLabel(i);
+      console.log(`Bank ${label} tones: ${tones.join(" ")}`);
+    });
+    bankTones = [];
+  }
+
+  stopBtn.addEventListener("click", async () => {
+    stopBtn.disabled = true;
+    try {
+      const result = await stopRecording({ finalize: true });
+      await cleanup(result && result.hadError ? undefined : "stopped", {
+        skipRecorderStop: true,
+      });
+    } finally {
+      startBtn.disabled = false;
+      setSampleButtonsDisabled(false);
     }
-    if (!bankTones[r.bank]) bankTones[r.bank] = [];
-    bankTones[r.bank].push(r.idx);
+    logTones();
+  });
 
-    const out = feedOne(DEC[r.bank], r.idx, r.score);
-    if (out) {
-      let bankMsg = null;
-      if (out.ok && out.okCRC && out.text) {
-        setStatus(`frame OK (bank ${r.bank})`);
-        bankMsg = 'frame OK';
-      } else if (!out.okCRC) {
-        setStatus(`frame CRC fail (bank ${r.bank})`);
-        bankMsg = 'CRC fail';
-      } else if (!out.ok) {
-        setStatus(`frame decode fail (bank ${r.bank})`);
-        bankMsg = 'decode fail';
+  for (const entry of sampleButtons) {
+    entry.button.addEventListener("click", async () => {
+      await playSample(entry);
+    });
+  }
+
+  async function playSample(entry) {
+    const { url, label } = entry;
+    startBtn.disabled = true;
+    setSampleButtonsDisabled(true);
+    stopBtn.disabled = true;
+    try {
+      await cleanup(null);
+      suppressReadyStatus = true;
+      await initProcessingChain();
+      const labelSuffix = label ? ` ${label}` : "";
+      setStatus(`loading sample${labelSuffix}…`);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`fetch failed (${response.status})`);
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await new Promise((resolve, reject) => {
+        audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
+      });
+      if (!audioBuffer || audioBuffer.numberOfChannels === 0) {
+        throw new Error("empty or unsupported WAV payload");
       }
-      if (bankMsg) setBankStatus(r.bank, bankMsg);
+      let playbackBuffer = audioBuffer;
+      if (audioBuffer.numberOfChannels > 1) {
+        const length = audioBuffer.length;
+        const mono = audioCtx.createBuffer(1, length, audioBuffer.sampleRate);
+        const out = mono.getChannelData(0);
+        for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+          const data = audioBuffer.getChannelData(ch);
+          for (let i = 0; i < length; i++) out[i] += data[i];
+        }
+        for (let i = 0; i < out.length; i++)
+          out[i] /= audioBuffer.numberOfChannels;
+        playbackBuffer = mono;
+      }
+      bufferSrc = audioCtx.createBufferSource();
+      bufferSrc.buffer = playbackBuffer;
+      bufferSrc.connect(workletNode);
+      bufferSrc.start();
+      bufferSrc.onended = async () => {
+        const finished = bufferSrc;
+        if (finished) {
+          finished.onended = null;
+          try {
+            finished.disconnect();
+          } catch (_) {}
+        }
+        bufferSrc = null;
+        stopBtn.disabled = true;
+        await cleanup("sample finished");
+        logTones();
+        startBtn.disabled = false;
+        setSampleButtonsDisabled(false);
+      };
+      setStatus(`playing sample${labelSuffix}…`);
+      stopBtn.disabled = false;
+    } catch (err) {
+      setStatus("error: " + ((err && err.message) || err));
+      await cleanup(null);
+      startBtn.disabled = false;
+      setSampleButtonsDisabled(false);
+      stopBtn.disabled = true;
     }
   }
-  for (let i = 0; i < activeBanks.length; i++) {
-    if (!activeBanks[i] && freqEls[i]) freqEls[i].textContent = '—';
+
+  downloadBtn.addEventListener("click", () => {
+    if (!recordedWavBlob) return;
+    const url = URL.createObjectURL(recordedWavBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    a.download = `fesk-recording-${stamp}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    requestAnimationFrame(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  });
+
+  // Handle candidates from both banks
+  function handleCandidates(results) {
+    const activeBanks = new Array(freqEls.length).fill(false);
+    const samplePowerEntry = results?.find(
+      (r) => Array.isArray(r?.powers) && r.powers.length,
+    );
+    const digitCount =
+      samplePowerEntry?.powers?.length ?? FREQS_SETS[0]?.length ?? 0;
+    const compositePowers = new Array(Math.max(digitCount, 0)).fill(0);
+    let compositeTotal = 0;
+    let compositeHasData = false;
+    let hasFrameOk = false;
+    let pendingStatus = null;
+    // For each active bank candidate, feed its decoder
+    for (const r of results) {
+      if (!r.active) continue;
+      if (Array.isArray(r.powers) && compositePowers.length) {
+        const len = Math.min(r.powers.length, compositePowers.length);
+        for (let i = 0; i < len; i += 1) {
+          const val = Number.isFinite(r.powers[i]) ? r.powers[i] : 0;
+          compositePowers[i] += val;
+          compositeTotal += val;
+        }
+        compositeHasData = true;
+      }
+      const threshold = SCORE_MIN_BANK[r.bank] ?? SCORE_MIN;
+      if ((r.score ?? 0) < threshold) continue;
+      if (freqEls[r.bank]) {
+        const displayFreq =
+          Number.isFinite(r.freqHz) && r.freqHz > 0
+            ? r.freqHz
+            : FREQS_SETS[r.bank] && Number.isFinite(FREQS_SETS[r.bank][r.idx])
+              ? FREQS_SETS[r.bank][r.idx]
+              : null;
+        if (Number.isFinite(displayFreq)) {
+          freqEls[r.bank].textContent = formatFreq(displayFreq);
+          activeBanks[r.bank] = true;
+        }
+      }
+      if (!bankTones[r.bank]) bankTones[r.bank] = [];
+      if (Number.isFinite(r.idx)) bankTones[r.bank].push(r.idx);
+
+      const out = Number.isFinite(r.idx)
+        ? feedOne(DEC[r.bank], r.idx, r.score)
+        : null;
+      if (out) {
+        let bankMsg = null;
+        if (out.ok && out.okCRC && out.text) {
+          setStatus(`frame OK (bank ${r.bank})`);
+          bankMsg = "frame OK";
+          hasFrameOk = true;
+          pendingStatus = null;
+        } else if (!out.okCRC) {
+          bankMsg = "CRC fail";
+          if (!hasFrameOk && !pendingStatus)
+            pendingStatus = `frame CRC fail (bank ${r.bank})`;
+        } else if (!out.ok) {
+          bankMsg = "decode fail";
+          if (!hasFrameOk && !pendingStatus)
+            pendingStatus = `frame decode fail (bank ${r.bank})`;
+        }
+        if (bankMsg) setBankStatus(r.bank, bankMsg);
+      }
+    }
+    if (compositeHasData && compositePowers.length) {
+      const total = compositeTotal;
+      if (total > 0) {
+        let bestIdx = 0;
+        let bestVal = compositePowers[0];
+        let secondVal = 0;
+        for (let i = 1; i < compositePowers.length; i += 1) {
+          const val = compositePowers[i];
+          if (val > bestVal) {
+            secondVal = bestVal;
+            bestVal = val;
+            bestIdx = i;
+          } else if (val > secondVal) {
+            secondVal = val;
+          }
+        }
+        const compositeScore = (bestVal - secondVal) / Math.max(1e-12, total);
+        if (compositeScore >= SCORE_MIN_COMPOSITE) {
+          if (!bankTones[COMPOSITE_BANK_INDEX])
+            bankTones[COMPOSITE_BANK_INDEX] = [];
+          bankTones[COMPOSITE_BANK_INDEX].push(bestIdx);
+          const out = feedOne(
+            DEC[COMPOSITE_BANK_INDEX],
+            bestIdx,
+            compositeScore,
+          );
+          if (out) {
+            let status = null;
+            if (out.ok && out.okCRC && out.text) {
+              status = "frame OK";
+              setStatus(`frame OK (bank ${COMPOSITE_BANK_INDEX})`);
+              hasFrameOk = true;
+              pendingStatus = null;
+            } else if (!out.okCRC) {
+              status = "CRC fail";
+              if (!hasFrameOk && !pendingStatus)
+                pendingStatus = `frame CRC fail (bank ${COMPOSITE_BANK_INDEX})`;
+            } else if (!out.ok) {
+              status = "decode fail";
+              if (!hasFrameOk && !pendingStatus)
+                pendingStatus = `frame decode fail (bank ${COMPOSITE_BANK_INDEX})`;
+            }
+            if (status) setBankStatus(COMPOSITE_BANK_INDEX, status);
+          }
+        }
+      }
+    }
+    if (!hasFrameOk && typeof pendingStatus === "string")
+      setStatus(pendingStatus);
+    for (let i = 0; i < activeBanks.length; i++) {
+      if (!activeBanks[i] && freqEls[i]) freqEls[i].textContent = "—";
+    }
   }
-}
 </script>
