@@ -6,7 +6,6 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample1Btn").click();
-    cy.wait(4000);
     cy.get("#out .decoded-ok", { timeout: 20000 })
       .should("not.be.empty")
       .should("contain.text", "test");
@@ -17,7 +16,6 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample2Btn").click();
-    cy.wait(20000);
     cy.get("#out .decoded-ok", { timeout: 20000 })
       .should("not.be.empty")
       .should("contain.text", "abc 123");
@@ -28,7 +26,6 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample3Btn").click();
-    cy.wait(10000);
     cy.get("#out .decoded-ok", { timeout: 20000 })
       .should("not.be.empty")
       .should("contain.text", "abc 123");
