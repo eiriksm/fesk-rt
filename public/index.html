@@ -179,20 +179,28 @@
     [2560.0, 3072.0],
     [2550.0, 3088.0],
     [2576.0, 3056.0],
+    [9260.0, 10440.0],
   ];
-  const DETECTOR_CONFIG = FREQS_SETS.map((base) => ({
-    base,
-    harmonicMultipliers: [1, 2, 3, 4],
-    detuneFactors: [0.99, 1, 1.01],
-  }));
+  const DETECTOR_CONFIG = FREQS_SETS.map((base, idx) => {
+    const config = {
+      base,
+      harmonicMultipliers: [1, 2, 3, 4],
+      detuneFactors: [0.99, 1, 1.01],
+    };
+    if (idx === 3) {
+      config.detuneFactors = [0.985, 0.995, 1, 1.005, 1.015];
+      config.extra = [[11040.0], [11040.0]];
+    }
+    return config;
+  });
   const ENERGY_FLOOR = 1e-6; // raise a bit if your room is noisy
   // Streaming tone detector parameters
-  const ENERGY_ON = 1.5e-3;
-  const ENERGY_OFF = 4e-4;
-  const MIN_GAP_MS = 4;
-  const IGNORE_HEAD_MS = 3;
-  const ENERGY_ENVELOPE_MS = 4;
-  const MIN_TONE_MS = 0;
+  const ENERGY_ON = 1e-3;
+  const ENERGY_OFF = 3e-4;
+  const MIN_GAP_MS = 5;
+  const IGNORE_HEAD_MS = 6;
+  const ENERGY_ENVELOPE_MS = 6;
+  const MIN_TONE_MS = 40;
   const HP_CUTOFF_HZ = 600;
   const INPUT_GAIN = 12;
   const SCORE_MIN = 0.2;
@@ -201,12 +209,13 @@
   const COMPOSITE_BANK_INDEX = FREQS_SETS.length;
   const COMPOSITE_LABEL = "Combo";
   const BANK_LABEL_OVERRIDES = new Map([
+    [3, "HW"],
     [COMPOSITE_BANK_INDEX, COMPOSITE_LABEL],
   ]);
   const SAMPLE_WAV_CONFIG = [
     { id: "sample1Btn", url: "sample.wav", label: "1" },
     { id: "sample2Btn", url: "sample2.wav", label: "2" },
-    { id: "sample3Btn", url: "sample-clock-on-phone.wav", label: "3" },
+    { id: "sample3Btn", url: "sample32.wav", label: "3" },
     {
       id: "sample4Btn",
       url: "sample-clock-on-phone-uncprocessed.wav",
