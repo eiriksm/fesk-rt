@@ -19,6 +19,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
     this.toneBuffer = [];
     this.toneSamples = 0;
     this.gapSamples = 0;
+    this.sampleRate = sampleRate;
     this.port.onmessage = (e) => {
       const {
         freqSets,
@@ -67,19 +68,106 @@ class MultiBankFESK extends AudioWorkletProcessor {
       this.hpLastX = 0;
       this.hpLastY = 0;
       this.resetToneState();
-      this.banks = Array.isArray(freqSets)
-        ? freqSets.map((freqs) => {
-            const coeffs = new Float32Array(4);
-            for (let i = 0; i < 4; i++) {
-              const omega = (2 * Math.PI * freqs[i]) / sampleRate;
-              coeffs[i] = 2 * Math.cos(omega);
-            }
-            return { coeffs };
-          })
-        : [];
+      this.banks = this._buildBanks(freqSets);
       this.ready = true;
       this.port.postMessage({ t: "ready", sr: sampleRate });
     };
+  }
+
+  _buildBanks(freqSets) {
+    if (!Array.isArray(freqSets)) return [];
+    const banks = [];
+    for (const cfg of freqSets) {
+      banks.push(this._buildBank(cfg));
+    }
+    return banks;
+  }
+
+  _buildBank(cfg) {
+    const norm = this._normalizeConfig(cfg);
+    const digitCount = norm.digitCount;
+    const digits = new Array(digitCount);
+    for (let d = 0; d < digitCount; d++) {
+      const freqMap = new Map();
+      const baseFreq = Number(norm.base[d]);
+      if (Number.isFinite(baseFreq) && baseFreq > 0) {
+        for (const mult of norm.harmonicMultipliers) {
+          const target = baseFreq * mult;
+          for (const det of norm.detuneFactors) {
+            this._addFreq(freqMap, target * det);
+          }
+        }
+      }
+      const extraList = norm.extra[d];
+      if (Array.isArray(extraList)) {
+        for (const f of extraList) this._addFreq(freqMap, f);
+      }
+      let freqArr = Array.from(freqMap.values())
+        .filter(
+          (f) => Number.isFinite(f) && f > 0 && f < this.sampleRate * 0.49,
+        )
+        .sort((a, b) => a - b);
+      if (
+        !freqArr.length &&
+        Number.isFinite(baseFreq) &&
+        baseFreq > 0 &&
+        baseFreq < this.sampleRate * 0.49
+      ) {
+        freqArr = [baseFreq];
+      }
+      const coeffs = new Float32Array(freqArr.length);
+      for (let i = 0; i < freqArr.length; i++) {
+        const omega = (2 * Math.PI * freqArr[i]) / this.sampleRate;
+        coeffs[i] = 2 * Math.cos(omega);
+      }
+      digits[d] = {
+        freqs: freqArr,
+        coeffs,
+        primary: freqArr[0] ?? 0,
+      };
+    }
+    return { digits };
+  }
+
+  _normalizeConfig(cfg) {
+    if (Array.isArray(cfg)) {
+      const digitCount = cfg.length;
+      return {
+        base: cfg,
+        harmonicMultipliers: [1],
+        detuneFactors: [1],
+        extra: Array.from({ length: digitCount }, () => []),
+        digitCount,
+      };
+    }
+    const base = Array.isArray(cfg?.base) ? cfg.base : [];
+    const harmonics =
+      Array.isArray(cfg?.harmonicMultipliers) && cfg.harmonicMultipliers.length
+        ? cfg.harmonicMultipliers
+        : [1];
+    const detune =
+      Array.isArray(cfg?.detuneFactors) && cfg.detuneFactors.length
+        ? cfg.detuneFactors
+        : [1];
+    const extra = Array.isArray(cfg?.extra) ? cfg.extra : [];
+    const digitCount = Math.max(base.length, extra.length);
+    const extras = new Array(digitCount);
+    for (let i = 0; i < digitCount; i++)
+      extras[i] = Array.isArray(extra[i]) ? extra[i] : [];
+    return {
+      base,
+      harmonicMultipliers: harmonics,
+      detuneFactors: detune,
+      extra: extras,
+      digitCount,
+    };
+  }
+
+  _addFreq(freqMap, freq) {
+    if (!Number.isFinite(freq)) return;
+    if (freq <= 0 || freq >= this.sampleRate * 0.49) return;
+    const key = Math.round(freq * 10); // ~0.1 Hz resolution dedupe
+    if (!freqMap.has(key)) freqMap.set(key, freq);
   }
 
   emitInactive() {
@@ -97,25 +185,35 @@ class MultiBankFESK extends AudioWorkletProcessor {
     this.gapSamples = 0;
   }
 
-  _goertzel(block, coeffs) {
-    const N = block.length;
-    const out = new Float32Array(4);
-    let s0 = 0;
-    let s1 = 0;
-    let s2 = 0;
-    for (let i = 0; i < 4; i++) {
+  _digitEnergy(block, digit) {
+    if (!digit || !digit.coeffs || !digit.coeffs.length) {
+      if (digit) digit.lastBestFreq = 0;
+      return 0;
+    }
+    let energy = 0;
+    let bestEnergy = -Infinity;
+    let bestFreq = digit.primary ?? 0;
+    const coeffs = digit.coeffs;
+    const freqs = digit.freqs || [];
+    for (let i = 0; i < coeffs.length; i++) {
       const c = coeffs[i];
-      s0 = 0;
-      s1 = 0;
-      s2 = 0;
-      for (let n = 0; n < N; n++) {
+      let s0 = 0;
+      let s1 = 0;
+      let s2 = 0;
+      for (let n = 0; n < block.length; n++) {
         s0 = block[n] + c * s1 - s2;
         s2 = s1;
         s1 = s0;
       }
-      out[i] = s1 * s1 + s2 * s2 - c * s1 * s2;
+      const part = s1 * s1 + s2 * s2 - c * s1 * s2;
+      energy += part;
+      if (part > bestEnergy) {
+        bestEnergy = part;
+        bestFreq = freqs[i] ?? bestFreq;
+      }
     }
-    return out;
+    digit.lastBestFreq = bestFreq;
+    return energy;
   }
 
   finalizeTone() {
@@ -146,29 +244,54 @@ class MultiBankFESK extends AudioWorkletProcessor {
     }
     const results = [];
     for (let b = 0; b < this.banks.length; b++) {
-      const P = this._goertzel(block, this.banks[b].coeffs);
-      const energy = P[0] + P[1] + P[2] + P[3];
-      if (energy <= this.energyFloor) {
+      const bank = this.banks[b];
+      if (!bank || !bank.digits) {
+        results.push({ bank: b, active: false });
+        continue;
+      }
+      const digitCount = bank.digits.length;
+      if (!digitCount) {
+        results.push({ bank: b, active: false });
+        continue;
+      }
+      const energies = new Float32Array(digitCount);
+      let totalEnergy = 0;
+      for (let i = 0; i < digitCount; i++) {
+        const energy = this._digitEnergy(block, bank.digits[i]);
+        energies[i] = energy;
+        totalEnergy += energy;
+      }
+      if (totalEnergy <= this.energyFloor) {
         results.push({ bank: b, active: false });
         continue;
       }
       let iMax = 0;
-      let vMax = P[0];
-      let i2 = 1;
-      let v2 = P[1];
-      for (let i = 1; i < 4; i++) {
-        if (P[i] > vMax) {
-          i2 = iMax;
+      let vMax = energies[0];
+      let v2 = 0;
+      for (let i = 1; i < digitCount; i++) {
+        const val = energies[i];
+        if (val > vMax) {
           v2 = vMax;
+          vMax = val;
           iMax = i;
-          vMax = P[i];
-        } else if (P[i] > v2) {
-          i2 = i;
-          v2 = P[i];
+        } else if (val > v2) {
+          v2 = val;
         }
       }
-      const score = (vMax - v2) / Math.max(1e-12, energy);
-      results.push({ bank: b, active: true, idx: iMax, score });
+      const score = (vMax - v2) / Math.max(1e-12, totalEnergy);
+      const digitInfo = bank.digits[iMax];
+      const bestFreq = digitInfo?.lastBestFreq;
+      results.push({
+        bank: b,
+        active: true,
+        idx: iMax,
+        score,
+        freqHz:
+          Number.isFinite(bestFreq) && bestFreq > 0
+            ? bestFreq
+            : (digitInfo?.primary ?? 0),
+        powers: Array.from(energies),
+      });
     }
     if (results.length) this.port.postMessage({ t: "candidates", results });
     this.resetToneState();
