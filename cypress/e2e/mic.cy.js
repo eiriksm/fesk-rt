@@ -5,8 +5,9 @@ describe("FESK real time Test", () => {
     cy.visit("/");
 
     cy.get("#startBtn", { timeout: 10000 }).click();
+    cy.wait(16000);
     cy.get("#stopBtn").click();
-    cy.get("#out", { timeout: 20000 })
+    cy.get("#out .decoded-ok", { timeout: 20000 })
       .should("not.be.empty")
       .should("contain.text", "test");
   });
