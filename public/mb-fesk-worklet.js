@@ -3,6 +3,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
     super();
     this.ready = false;
     this.banks = [];
+    this.pipelineKey = null;
     this.energyFloor = 0;
     this.energyOn = 0;
     this.energyOff = 0;
@@ -31,7 +32,9 @@ class MultiBankFESK extends AudioWorkletProcessor {
         ignoreHeadMs,
         envelopeMs,
         hpCutoffHz,
+        pipelineKey,
       } = e.data;
+      this.pipelineKey = typeof pipelineKey === "string" ? pipelineKey : null;
       this.energyFloor = Number.isFinite(energyFloor) ? energyFloor : 0;
       this.energyOn = Number.isFinite(energyOn) ? energyOn : 0;
       this.energyOff = Number.isFinite(energyOff) ? energyOff : 0;
@@ -70,7 +73,11 @@ class MultiBankFESK extends AudioWorkletProcessor {
       this.resetToneState();
       this.banks = this._buildBanks(freqSets);
       this.ready = true;
-      this.port.postMessage({ t: "ready", sr: sampleRate });
+      this.port.postMessage({
+        t: "ready",
+        sr: sampleRate,
+        pipeline: this.pipelineKey,
+      });
     };
   }
 
@@ -175,7 +182,11 @@ class MultiBankFESK extends AudioWorkletProcessor {
     const results = [];
     for (let b = 0; b < this.banks.length; b++)
       results.push({ bank: b, active: false });
-    this.port.postMessage({ t: "candidates", results });
+    this.port.postMessage({
+      t: "candidates",
+      pipeline: this.pipelineKey,
+      results,
+    });
   }
 
   resetToneState() {
@@ -293,7 +304,12 @@ class MultiBankFESK extends AudioWorkletProcessor {
         powers: Array.from(energies),
       });
     }
-    if (results.length) this.port.postMessage({ t: "candidates", results });
+    if (results.length)
+      this.port.postMessage({
+        t: "candidates",
+        pipeline: this.pipelineKey,
+        results,
+      });
     this.resetToneState();
   }
 

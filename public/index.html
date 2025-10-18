@@ -173,7 +173,7 @@
 </div>
 
 <script type="module">
-  let bankTones = [];
+  const pipelineTones = new Map();
   // =================== CONFIG ===================
   const FREQS_SETS = [
     [2560.0, 3072.0],
@@ -203,20 +203,45 @@
   const INPUT_GAIN = 12;
   const SCORE_MIN = 0.2;
   const SCORE_MIN_BANK = FREQS_SETS.map(() => 0.3);
-  const SCORE_MIN_COMPOSITE = 0.25;
-  const COMPOSITE_BANK_INDEX = FREQS_SETS.length;
-  const COMPOSITE_LABEL = "Combo";
-  const BANK_LABEL_OVERRIDES = new Map([
-    [3, "HW"],
-    [COMPOSITE_BANK_INDEX, COMPOSITE_LABEL],
-  ]);
+  const BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
+  const BOOST_GAIN_MULTIPLIER = 26; // ≈ sample32_rms / sample4_rms
+  const PIPELINE_BASE_DEFS = [];
+  const PIPELINE_BOOST_DEFS = [];
+  FREQS_SETS.forEach((_, idx) => {
+    const baseLabel = bankLabel(idx);
+    PIPELINE_BASE_DEFS.push({
+      key: `bank-${idx}`,
+      baseBankIndex: idx,
+      label: `Bank ${baseLabel}`,
+      shortLabel: `${baseLabel}`,
+      gainMultiplier: 1,
+    });
+    PIPELINE_BOOST_DEFS.push({
+      key: `bank-${idx}-boost`,
+      baseBankIndex: idx,
+      label: `Bank ${baseLabel} boost`,
+      shortLabel: `${baseLabel}+`,
+      gainMultiplier: BOOST_GAIN_MULTIPLIER,
+      isBoost: true,
+    });
+  });
+  const PIPELINE_DEFS = [...PIPELINE_BASE_DEFS, ...PIPELINE_BOOST_DEFS];
+  const PIPELINE_BY_KEY = new Map(
+    PIPELINE_DEFS.map((def) => [def.key, def]),
+  );
+  const PIPELINE_THRESHOLD = new Map(
+    PIPELINE_DEFS.map((def) => [
+      def.key,
+      SCORE_MIN_BANK[def.baseBankIndex] ?? SCORE_MIN,
+    ]),
+  );
   const SAMPLE_WAV_CONFIG = [
     { id: "sample1Btn", url: "sample.wav", label: "1" },
     { id: "sample2Btn", url: "sample2.wav", label: "2" },
     { id: "sample3Btn", url: "sample32.wav", label: "3" },
     {
       id: "sample4Btn",
-      url: "sample-clock-on-phone-uncprocessed.wav",
+      url: "sample4.wav",
       label: "4",
     },
     { id: "sample5Btn", url: "sample-clock-on-laptop.wav", label: "5" },
@@ -336,78 +361,46 @@
   const downloadBtn = document.getElementById("downloadBtn");
   const DOWNLOAD_LABEL = "Download WAV ⬇️";
   const debugMetricsEl = document.getElementById("debugMetrics");
-  const freqEls = [];
-  const bankStatusEls = [];
-  const bankOutputEls = [];
+  const freqEls = new Map();
+  const pipelineStatusEls = new Map();
+  const pipelineOutputEls = new Map();
   const sampleButtons = SAMPLE_WAV_CONFIG.map(({ id, url, label }) => {
     const button = document.getElementById(id);
     return button ? { button, url, label } : null;
   }).filter(Boolean);
 
-  // Dynamically create bank debug metrics
-  function setupBankDebugMetrics() {
-    FREQS_SETS.forEach((_, idx) => {
-      const label = bankLabel(idx);
-
-      // Create Hz metric
+  // Dynamically create pipeline debug metrics
+  function setupPipelineDebugMetrics() {
+    PIPELINE_DEFS.forEach((def) => {
       const hzMetric = document.createElement("div");
       hzMetric.className = "debug-metric";
       const hzLabel = document.createElement("strong");
-      hzLabel.textContent = `Bank ${label} Hz:`;
+      hzLabel.textContent = `${def.label} Hz:`;
       const hzValue = document.createElement("span");
-      hzValue.id = `freq${idx}`;
+      hzValue.id = `freq-${def.key}`;
       hzValue.textContent = "—";
       hzMetric.append(hzLabel, " ", hzValue);
       debugMetricsEl.append(hzMetric);
-      freqEls[idx] = hzValue;
+      freqEls.set(def.key, hzValue);
 
-      // Create status metric
       const statusMetric = document.createElement("div");
       statusMetric.className = "debug-metric";
       const statusLabel = document.createElement("strong");
-      statusLabel.textContent = `Bank ${label} status:`;
+      statusLabel.textContent = `${def.label} status:`;
       const statusValue = document.createElement("span");
-      statusValue.id = `bankStatus${idx}`;
+      statusValue.id = `status-${def.key}`;
       statusValue.textContent = "—";
       statusMetric.append(statusLabel, " ", statusValue);
       debugMetricsEl.append(statusMetric);
-      bankStatusEls[idx] = statusValue;
+      pipelineStatusEls.set(def.key, statusValue);
     });
-  }
-
-  function setupCompositeDebugMetrics() {
-    const idx = COMPOSITE_BANK_INDEX;
-    const label = bankLabel(idx);
-
-    const hzMetric = document.createElement("div");
-    hzMetric.className = "debug-metric";
-    const hzLabel = document.createElement("strong");
-    hzLabel.textContent = `Bank ${label} Hz:`;
-    const hzValue = document.createElement("span");
-    hzValue.id = `freq${idx}`;
-    hzValue.textContent = "—";
-    hzMetric.append(hzLabel, " ", hzValue);
-    debugMetricsEl.append(hzMetric);
-    freqEls[idx] = hzValue;
-
-    const statusMetric = document.createElement("div");
-    statusMetric.className = "debug-metric";
-    const statusLabel = document.createElement("strong");
-    statusLabel.textContent = `Bank ${label} status:`;
-    const statusValue = document.createElement("span");
-    statusValue.id = `bankStatus${idx}`;
-    statusValue.textContent = "—";
-    statusMetric.append(statusLabel, " ", statusValue);
-    debugMetricsEl.append(statusMetric);
-    bankStatusEls[idx] = statusValue;
   }
 
   function setSampleButtonsDisabled(disabled) {
     for (const entry of sampleButtons) entry.button.disabled = disabled;
   }
 
-  setupBankDebugMetrics();
-  setupCompositeDebugMetrics();
+  setupPipelineDebugMetrics();
   setupOutputContainers();
 
   let recorder = null;
@@ -437,34 +430,23 @@
 
   function setupOutputContainers() {
     outEl.textContent = "";
-    FREQS_SETS.forEach((_, idx) => {
+    PIPELINE_DEFS.forEach((def) => {
       const wrapper = document.createElement("div");
       wrapper.className = "out-bank";
       const title = document.createElement("div");
       title.className = "out-bank-title";
-      title.textContent = `Bank ${bankLabel(idx)}`;
+      title.textContent = def.label;
       const body = document.createElement("div");
       body.className = "out-bank-body";
       wrapper.append(title, body);
       outEl.append(wrapper);
-      bankOutputEls[idx] = body;
+      pipelineOutputEls.set(def.key, body);
     });
-
-    const compWrapper = document.createElement("div");
-    compWrapper.className = "out-bank";
-    const compTitle = document.createElement("div");
-    compTitle.className = "out-bank-title";
-    compTitle.textContent = `Bank ${bankLabel(COMPOSITE_BANK_INDEX)}`;
-    const compBody = document.createElement("div");
-    compBody.className = "out-bank-body";
-    compWrapper.append(compTitle, compBody);
-    outEl.append(compWrapper);
-    bankOutputEls[COMPOSITE_BANK_INDEX] = compBody;
   }
 
-  function appendResult(bank, text) {
+  function appendResult(pipelineKey, text) {
     if (!text) return;
-    const target = bankOutputEls[bank];
+    const target = pipelineOutputEls.get(pipelineKey);
     if (!target) return;
     const span = document.createElement("span");
     span.className = "decoded-ok";
@@ -476,18 +458,18 @@
     return (txt.endsWith(".0") ? txt.slice(0, -2) : txt) + " Hz";
   }
   function resetFreqDisplays() {
-    for (const el of freqEls) if (el) el.textContent = "—";
+    for (const el of freqEls.values()) el.textContent = "—";
   }
-  function resetBankStatuses() {
-    for (const el of bankStatusEls) if (el) el.textContent = "—";
+  function resetPipelineStatuses() {
+    for (const el of pipelineStatusEls.values()) el.textContent = "—";
   }
-  function setBankStatus(bank, text) {
-    const el = bankStatusEls[bank];
+  function setPipelineStatus(pipelineKey, text) {
+    const el = pipelineStatusEls.get(pipelineKey);
     if (el) el.textContent = text;
   }
 
   resetFreqDisplays();
-  resetBankStatuses();
+  resetPipelineStatuses();
 
   function getRecorderMimeType() {
     if (typeof MediaRecorder === "undefined") return null;
@@ -676,7 +658,7 @@
   }
 
   // =================== Dual decoder state ===================
-  function mkDec(bank) {
+  function mkDec(pipelineKey, label) {
     return {
       state: "hunt",
       frameBits: [],
@@ -688,15 +670,18 @@
       previewNode: null,
       previewText: "",
       previewConsumedBits: 0,
-      bank,
+      pipelineKey,
+      label,
     };
   }
-  const DEC = FREQS_SETS.map((_, bank) => mkDec(bank));
-  DEC[COMPOSITE_BANK_INDEX] = mkDec(COMPOSITE_BANK_INDEX);
+  const DEC = new Map();
+  PIPELINE_DEFS.forEach((def) => {
+    DEC.set(def.key, mkDec(def.key, def.label));
+  });
 
   function ensurePreview(dec) {
     if (dec.previewNode) return;
-    const target = bankOutputEls[dec.bank];
+    const target = pipelineOutputEls.get(dec.pipelineKey);
     if (!target) return;
     const span = document.createElement("span");
     span.className = "provisional";
@@ -736,7 +721,7 @@
       }
       dec.previewNode = null;
     } else if (shouldKeep) {
-      appendResult(dec.bank, result.text);
+      appendResult(dec.pipelineKey, result.text);
     }
     dec.previewText = "";
     dec.previewConsumedBits = 0;
@@ -758,7 +743,54 @@
     d.previewConsumedBits = 0;
   }
   function resetAllDecoders() {
-    for (const d of DEC) resetDec(d);
+    for (const dec of DEC.values()) resetDec(dec);
+  }
+
+  function allPipelinesReady() {
+    if (!pipelineStates.size) return false;
+    for (const state of pipelineStates.values()) {
+      if (!state.ready) return false;
+    }
+    return true;
+  }
+
+  function flushPipelineReadyWaiters() {
+    if (!pipelineReadyWaiters.size) return;
+    if (!allPipelinesReady()) return;
+    for (const resolve of pipelineReadyWaiters) resolve();
+    pipelineReadyWaiters.clear();
+  }
+
+  function waitForPipelinesReady() {
+    if (allPipelinesReady()) return Promise.resolve();
+    return new Promise((resolve) => {
+      pipelineReadyWaiters.add(resolve);
+    });
+  }
+
+  function connectNodeToPipelines(node, type) {
+    for (const state of pipelineStates.values()) {
+      try {
+        const target =
+          type === "sample" ? state.sampleGainNode : state.micGainNode;
+        node.connect(target);
+      } catch (err) {
+        console.warn(
+          `[${state.def.label}] connect failed`,
+          err?.message || err,
+        );
+      }
+    }
+  }
+
+  function disconnectNodeFromPipelines(node, type) {
+    for (const state of pipelineStates.values()) {
+      try {
+        const target =
+          type === "sample" ? state.sampleGainNode : state.micGainNode;
+        node.disconnect(target);
+      } catch (_) {}
+    }
   }
 
   async function cleanup(nextStatus, opts = {}) {
@@ -771,25 +803,14 @@
       try {
         bufferSrc.stop();
       } catch (_) {}
+      disconnectNodeFromPipelines(bufferSrc, "sample");
       try {
         bufferSrc.disconnect();
       } catch (_) {}
       bufferSrc = null;
     }
-    if (workletNode) {
-      workletNode.port.onmessage = null;
-      try {
-        workletNode.disconnect();
-      } catch (_) {}
-      workletNode = null;
-    }
-    if (inputGainNode) {
-      try {
-        inputGainNode.disconnect();
-      } catch (_) {}
-      inputGainNode = null;
-    }
     if (mediaSrc) {
+      disconnectNodeFromPipelines(mediaSrc, "mic");
       try {
         mediaSrc.disconnect();
       } catch (_) {}
@@ -799,6 +820,22 @@
       for (const track of mediaStream.getTracks()) track.stop();
       mediaStream = null;
     }
+    for (const state of pipelineStates.values()) {
+      state.ready = false;
+      try {
+        state.micGainNode.disconnect();
+      } catch (_) {}
+      try {
+        state.sampleGainNode.disconnect();
+      } catch (_) {}
+      try {
+        state.workletNode.disconnect();
+      } catch (_) {}
+      state.workletNode.port.onmessage = null;
+    }
+    pipelineStates.clear();
+    for (const resolve of pipelineReadyWaiters) resolve();
+    pipelineReadyWaiters.clear();
     if (audioCtx) {
       try {
         await audioCtx.close();
@@ -808,7 +845,8 @@
     srEl.textContent = "—";
     resetAllDecoders();
     resetFreqDisplays();
-    resetBankStatuses();
+    resetPipelineStatuses();
+    pipelineTones.clear();
     suppressReadyStatus = false;
     if (typeof nextStatus === "string") setStatus(nextStatus);
   }
@@ -816,7 +854,9 @@
   async function initProcessingChain() {
     resetAllDecoders();
     resetFreqDisplays();
-    resetBankStatuses();
+    resetPipelineStatuses();
+    pipelineTones.clear();
+    pipelineReadyWaiters.clear();
     setStatus("initializing audio…");
     audioCtx = new (window.AudioContext || window.webkitAudioContext)({
       latencyHint: "interactive",
@@ -824,31 +864,78 @@
     srEl.textContent = audioCtx.sampleRate.toFixed(0) + " Hz";
     const workletModuleUrl = new URL("./mb-fesk-worklet.js", import.meta.url);
     await audioCtx.audioWorklet.addModule(workletModuleUrl);
-    workletNode = new AudioWorkletNode(audioCtx, "mb-fesk", {
-      numberOfInputs: 1,
-      numberOfOutputs: 0,
-    });
-    inputGainNode = audioCtx.createGain();
-    inputGainNode.gain.value = INPUT_GAIN;
-    inputGainNode.connect(workletNode);
-    workletNode.port.onmessage = (e) => {
-      const m = e.data;
-      if (m.t === "ready") {
-        if (!suppressReadyStatus) setStatus("ready");
-      } else if (m.t === "candidates") handleCandidates(m.results);
-    };
-    workletNode.port.postMessage({
-      freqSets: DETECTOR_CONFIG,
-      energyFloor: ENERGY_FLOOR,
-      energyOn: ENERGY_ON,
-      energyOff: ENERGY_OFF,
-      minToneMs: MIN_TONE_MS,
-      minGapMs: MIN_GAP_MS,
-      ignoreHeadMs: IGNORE_HEAD_MS,
-      envelopeMs: ENERGY_ENVELOPE_MS,
-      hpCutoffHz: HP_CUTOFF_HZ,
-    });
-    return workletNode;
+    pipelineStates.clear();
+    for (const def of PIPELINE_DEFS) {
+      const workletNode = new AudioWorkletNode(audioCtx, "mb-fesk", {
+        numberOfInputs: 1,
+        numberOfOutputs: 0,
+      });
+      const micGainNode = audioCtx.createGain();
+      micGainNode.gain.value = INPUT_GAIN * def.gainMultiplier;
+      micGainNode.connect(workletNode);
+      const sampleGainNode = audioCtx.createGain();
+      sampleGainNode.gain.value = def.gainMultiplier;
+      sampleGainNode.connect(workletNode);
+      setPipelineStatus(def.key, "initializing…");
+      const state = {
+        def,
+        workletNode,
+        micGainNode,
+        sampleGainNode,
+        ready: false,
+      };
+      pipelineStates.set(def.key, state);
+      workletNode.port.onmessage = (e) => handleWorkletMessage(state, e.data);
+      workletNode.port.postMessage({
+        pipelineKey: def.key,
+        freqSets: [DETECTOR_CONFIG[def.baseBankIndex]],
+        energyFloor: ENERGY_FLOOR,
+        energyOn: ENERGY_ON,
+        energyOff: ENERGY_OFF,
+        minToneMs: MIN_TONE_MS,
+        minGapMs: MIN_GAP_MS,
+        ignoreHeadMs: IGNORE_HEAD_MS,
+        envelopeMs: ENERGY_ENVELOPE_MS,
+        hpCutoffHz: HP_CUTOFF_HZ,
+      });
+      console.info(
+        `[${def.label}] pipeline init (mic gain ×${(
+          INPUT_GAIN * def.gainMultiplier
+        ).toFixed(2)}, sample gain ×${def.gainMultiplier.toFixed(2)})`,
+      );
+    }
+  }
+
+  function handleWorkletMessage(state, message) {
+    if (!message) return;
+    const def = state.def;
+    if (message.pipeline && message.pipeline !== def.key) {
+      console.warn(
+        `[${def.label}] ignoring message for ${message.pipeline}`,
+      );
+      return;
+    }
+    if (message.t === "ready") {
+      state.ready = true;
+      const sr =
+        Number.isFinite(message.sr) && message.sr > 0
+          ? `${Math.round(message.sr)} Hz`
+          : "";
+      setPipelineStatus(def.key, sr ? `ready (${sr})` : "ready");
+      console.info(
+        `[${def.label}] worklet ready (mic gain ×${(
+          INPUT_GAIN * def.gainMultiplier
+        ).toFixed(2)}, sample gain ×${def.gainMultiplier.toFixed(2)})`,
+      );
+      if (!suppressReadyStatus && allPipelinesReady()) {
+        setStatus("ready");
+      }
+      flushPipelineReadyWaiters();
+      return;
+    }
+    if (message.t === "candidates") {
+      handlePipelineCandidates(def, message.results);
+    }
   }
 
   function finalizeFrame(dec) {
@@ -978,10 +1065,10 @@
   let audioCtx = null;
   let mediaStream = null;
   let mediaSrc = null;
-  let workletNode = null;
   let bufferSrc = null;
-  let inputGainNode = null;
   let suppressReadyStatus = false;
+  const pipelineStates = new Map();
+  const pipelineReadyWaiters = new Set();
 
   startBtn.addEventListener("click", async () => {
     startBtn.disabled = true;
@@ -990,6 +1077,7 @@
     try {
       await cleanup(null);
       await initProcessingChain();
+      await waitForPipelinesReady();
       setStatus("requesting microphone…");
       mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -1000,7 +1088,11 @@
         },
       });
       mediaSrc = audioCtx.createMediaStreamSource(mediaStream);
-      if (inputGainNode) mediaSrc.connect(inputGainNode);
+      connectNodeToPipelines(mediaSrc, "mic");
+      for (const state of pipelineStates.values()) {
+        console.info(`[${state.def.label}] microphone connected`);
+        setPipelineStatus(state.def.key, "listening…");
+      }
       clearRecording();
       setupRecorder(mediaStream);
       setStatus("listening… wait for 111110 start marker");
@@ -1015,11 +1107,13 @@
   });
 
   function logTones() {
-    bankTones.forEach((tones, i) => {
-      const label = bankLabel(i);
-      console.log(`Bank ${label} tones: ${tones.join(" ")}`);
-    });
-    bankTones = [];
+    for (const [key, tones] of pipelineTones.entries()) {
+      if (!tones || !tones.length) continue;
+      const def = PIPELINE_BY_KEY.get(key);
+      const label = def ? def.label : key;
+      console.log(`[${label}] tones: ${tones.join(" ")}`);
+    }
+    pipelineTones.clear();
   }
 
   stopBtn.addEventListener("click", async () => {
@@ -1051,6 +1145,7 @@
       await cleanup(null);
       suppressReadyStatus = true;
       await initProcessingChain();
+      await waitForPipelinesReady();
       const labelSuffix = label ? ` ${label}` : "";
       setStatus(`loading sample${labelSuffix}…`);
       const response = await fetch(url);
@@ -1077,12 +1172,17 @@
       }
       bufferSrc = audioCtx.createBufferSource();
       bufferSrc.buffer = playbackBuffer;
-      bufferSrc.connect(workletNode);
+      connectNodeToPipelines(bufferSrc, "sample");
+      for (const state of pipelineStates.values()) {
+        console.info(`[${state.def.label}] sample input connected`);
+        setPipelineStatus(state.def.key, `sample ${label || ""}…`.trim());
+      }
       bufferSrc.start();
       bufferSrc.onended = async () => {
         const finished = bufferSrc;
         if (finished) {
           finished.onended = null;
+          disconnectNodeFromPipelines(finished, "sample");
           try {
             finished.disconnect();
           } catch (_) {}
@@ -1120,121 +1220,79 @@
     });
   });
 
-  // Handle candidates from both banks
-  function handleCandidates(results) {
-    const activeBanks = new Array(freqEls.length).fill(false);
-    const samplePowerEntry = results?.find(
-      (r) => Array.isArray(r?.powers) && r.powers.length,
-    );
-    const digitCount =
-      samplePowerEntry?.powers?.length ?? FREQS_SETS[0]?.length ?? 0;
-    const compositePowers = new Array(Math.max(digitCount, 0)).fill(0);
-    let compositeTotal = 0;
-    let compositeHasData = false;
-    let hasFrameOk = false;
-    let pendingStatus = null;
-    // For each active bank candidate, feed its decoder
-    for (const r of results) {
-      if (!r.active) continue;
-      if (Array.isArray(r.powers) && compositePowers.length) {
-        const len = Math.min(r.powers.length, compositePowers.length);
-        for (let i = 0; i < len; i += 1) {
-          const val = Number.isFinite(r.powers[i]) ? r.powers[i] : 0;
-          compositePowers[i] += val;
-          compositeTotal += val;
-        }
-        compositeHasData = true;
-      }
-      const threshold = SCORE_MIN_BANK[r.bank] ?? SCORE_MIN;
-      if ((r.score ?? 0) < threshold) continue;
-      if (freqEls[r.bank]) {
-        const displayFreq =
-          Number.isFinite(r.freqHz) && r.freqHz > 0
-            ? r.freqHz
-            : FREQS_SETS[r.bank] && Number.isFinite(FREQS_SETS[r.bank][r.idx])
-              ? FREQS_SETS[r.bank][r.idx]
-              : null;
-        if (Number.isFinite(displayFreq)) {
-          freqEls[r.bank].textContent = formatFreq(displayFreq);
-          activeBanks[r.bank] = true;
-        }
-      }
-      if (!bankTones[r.bank]) bankTones[r.bank] = [];
-      if (Number.isFinite(r.idx)) bankTones[r.bank].push(r.idx);
+  function handlePipelineCandidates(def, results) {
+    const freqEl = freqEls.get(def.key);
+    const dec = DEC.get(def.key);
+    if (!dec) return;
 
-      const out = Number.isFinite(r.idx)
-        ? feedOne(DEC[r.bank], r.idx, r.score)
-        : null;
-      if (out) {
-        let bankMsg = null;
-        if (out.ok && out.okCRC && out.text) {
-          setStatus(`frame OK (bank ${r.bank})`);
-          bankMsg = "frame OK";
-          hasFrameOk = true;
-          pendingStatus = null;
-        } else if (!out.okCRC) {
-          bankMsg = "CRC fail";
-          if (!hasFrameOk && !pendingStatus)
-            pendingStatus = `frame CRC fail (bank ${r.bank})`;
-        } else if (!out.ok) {
-          bankMsg = "decode fail";
-          if (!hasFrameOk && !pendingStatus)
-            pendingStatus = `frame decode fail (bank ${r.bank})`;
-        }
-        if (bankMsg) setBankStatus(r.bank, bankMsg);
+    if (!Array.isArray(results) || !results.length) {
+      if (freqEl) freqEl.textContent = "—";
+      setPipelineStatus(def.key, "idle");
+      return;
+    }
+
+    let tones = pipelineTones.get(def.key);
+    if (!tones) {
+      tones = [];
+      pipelineTones.set(def.key, tones);
+    }
+
+    let hadActive = false;
+    let hadFrameOk = false;
+    let pendingStatus = null;
+    const baseFreqs = FREQS_SETS[def.baseBankIndex] || [];
+
+    for (const r of results) {
+      if (!r || !r.active) continue;
+      hadActive = true;
+      if (Number.isFinite(r.idx)) tones.push(r.idx);
+
+      const displayFreq =
+        Number.isFinite(r.freqHz) && r.freqHz > 0
+          ? r.freqHz
+          : Number.isFinite(baseFreqs[r.idx])
+            ? baseFreqs[r.idx]
+            : null;
+      if (freqEl && Number.isFinite(displayFreq)) {
+        freqEl.textContent = formatFreq(Number(displayFreq));
+      }
+
+      const threshold =
+        PIPELINE_THRESHOLD.get(def.key) ?? (SCORE_MIN_BANK[0] ?? SCORE_MIN);
+      if ((r.score ?? 0) < threshold) continue;
+
+      const out = Number.isFinite(r.idx) ? feedOne(dec, r.idx, r.score) : null;
+      if (!out) continue;
+
+      if (out.ok && out.okCRC && out.text) {
+        setStatus(`frame OK (${def.label})`);
+        setPipelineStatus(def.key, "frame OK");
+        const avgScore = Number.isFinite(out.avgScore)
+          ? out.avgScore.toFixed(3)
+          : "n/a";
+        console.info(
+          `[${def.label}] frame OK: "${out.text}" (avg score ${avgScore})`,
+        );
+        hadFrameOk = true;
+        pendingStatus = null;
+      } else if (!out.okCRC) {
+        setPipelineStatus(def.key, "CRC fail");
+        if (!hadFrameOk && !pendingStatus)
+          pendingStatus = `frame CRC fail (${def.label})`;
+        console.warn(`[${def.label}] frame CRC fail`);
+      } else if (!out.ok) {
+        setPipelineStatus(def.key, "decode fail");
+        if (!hadFrameOk && !pendingStatus)
+          pendingStatus = `frame decode fail (${def.label})`;
+        console.warn(`[${def.label}] frame decode fail`);
       }
     }
-    if (compositeHasData && compositePowers.length) {
-      const total = compositeTotal;
-      if (total > 0) {
-        let bestIdx = 0;
-        let bestVal = compositePowers[0];
-        let secondVal = 0;
-        for (let i = 1; i < compositePowers.length; i += 1) {
-          const val = compositePowers[i];
-          if (val > bestVal) {
-            secondVal = bestVal;
-            bestVal = val;
-            bestIdx = i;
-          } else if (val > secondVal) {
-            secondVal = val;
-          }
-        }
-        const compositeScore = (bestVal - secondVal) / Math.max(1e-12, total);
-        if (compositeScore >= SCORE_MIN_COMPOSITE) {
-          if (!bankTones[COMPOSITE_BANK_INDEX])
-            bankTones[COMPOSITE_BANK_INDEX] = [];
-          bankTones[COMPOSITE_BANK_INDEX].push(bestIdx);
-          const out = feedOne(
-            DEC[COMPOSITE_BANK_INDEX],
-            bestIdx,
-            compositeScore,
-          );
-          if (out) {
-            let status = null;
-            if (out.ok && out.okCRC && out.text) {
-              status = "frame OK";
-              setStatus(`frame OK (bank ${COMPOSITE_BANK_INDEX})`);
-              hasFrameOk = true;
-              pendingStatus = null;
-            } else if (!out.okCRC) {
-              status = "CRC fail";
-              if (!hasFrameOk && !pendingStatus)
-                pendingStatus = `frame CRC fail (bank ${COMPOSITE_BANK_INDEX})`;
-            } else if (!out.ok) {
-              status = "decode fail";
-              if (!hasFrameOk && !pendingStatus)
-                pendingStatus = `frame decode fail (bank ${COMPOSITE_BANK_INDEX})`;
-            }
-            if (status) setBankStatus(COMPOSITE_BANK_INDEX, status);
-          }
-        }
-      }
-    }
-    if (!hasFrameOk && typeof pendingStatus === "string")
+
+    if (!hadActive) {
+      if (freqEl) freqEl.textContent = "—";
+      setPipelineStatus(def.key, "idle");
+    } else if (!hadFrameOk && typeof pendingStatus === "string") {
       setStatus(pendingStatus);
-    for (let i = 0; i < activeBanks.length; i++) {
-      if (!activeBanks[i] && freqEls[i]) freqEls[i].textContent = "—";
     }
   }
 </script>
