@@ -847,7 +847,6 @@
     resetAllDecoders();
     resetFreqDisplays();
     resetPipelineStatuses();
-    setupOutputContainers();
     pipelineTones.clear();
     suppressReadyStatus = false;
     if (typeof nextStatus === "string") setStatus(nextStatus);
@@ -1078,6 +1077,7 @@
     setSampleButtonsDisabled(true);
     try {
       await cleanup(null);
+      setupOutputContainers();
       await initProcessingChain();
       await waitForPipelinesReady();
       setStatus("requesting microphone…");
@@ -1145,6 +1145,7 @@
     stopBtn.disabled = true;
     try {
       await cleanup(null);
+      setupOutputContainers();
       suppressReadyStatus = true;
       await initProcessingChain();
       await waitForPipelinesReady();
