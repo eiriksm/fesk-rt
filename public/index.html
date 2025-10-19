@@ -429,6 +429,7 @@
   }
 
   function setupOutputContainers() {
+    pipelineOutputEls.clear();
     outEl.textContent = "";
     PIPELINE_DEFS.forEach((def) => {
       const wrapper = document.createElement("div");
@@ -1076,6 +1077,7 @@
     setSampleButtonsDisabled(true);
     try {
       await cleanup(null);
+      setupOutputContainers();
       await initProcessingChain();
       await waitForPipelinesReady();
       setStatus("requesting microphone…");
@@ -1143,6 +1145,7 @@
     stopBtn.disabled = true;
     try {
       await cleanup(null);
+      setupOutputContainers();
       suppressReadyStatus = true;
       await initProcessingChain();
       await waitForPipelinesReady();
