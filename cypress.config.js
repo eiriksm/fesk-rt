@@ -12,7 +12,7 @@ export default defineConfig({
           launchOptions.args.push('--use-fake-ui-for-media-stream')
           launchOptions.args.push('--use-fake-device-for-media-stream')
 
-          const audioFixture = config.env.fakeAudioCapture || 'public/sample.wav'
+          const audioFixture = config.env.fakeAudioCapture || 'public/sample4.wav'
           const resolvedPath = path.resolve(config.projectRoot, audioFixture)
           launchOptions.args.push(`--use-file-for-fake-audio-capture=${resolvedPath}`)
         }
