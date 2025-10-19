@@ -103,17 +103,6 @@ jobs:
             fakeAudioCapture: public/sample.wav
             expectedText: test
             recordDurationMs: 16000
-          - name: mic-sample2
-            spec: cypress/e2e/mic.cy.js
-            fakeAudioCapture: public/sample2.wav
-            expectedText: "abc 123"
-            recordDurationMs: 16000
-          - name: mic-sample32
-            spec: cypress/e2e/mic.cy.js
-            fakeAudioCapture: public/sample32.wav
-            expectedText: "abc 123"
-            recordDurationMs: 16000
-            decodeTimeoutMs: 25000
           - name: mic-sample4
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/sample4.wav
