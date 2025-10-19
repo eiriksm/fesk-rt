@@ -1,3 +1,5 @@
+import { mountPipelineDebugMetrics } from "./build/react-app.js";
+
 const pipelineTones = new Map();
 // =================== CONFIG ===================
 const FREQS_SETS = [
@@ -176,54 +178,31 @@ function bitsToByte(bits) {
 }
 
 // =================== UI helpers ===================
-const statusEl = document.getElementById("status");
 const outEl = document.getElementById("out");
-const srEl = document.getElementById("sr");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
-const debugMetricsEl = document.getElementById("debugMetrics");
-const freqEls = new Map();
-const pipelineStatusEls = new Map();
+const debugMetricsRoot = document.getElementById("debugMetrics");
+const pipelineMetrics =
+  debugMetricsRoot instanceof HTMLElement
+    ? mountPipelineDebugMetrics({
+        container: debugMetricsRoot,
+        pipelines: PIPELINE_DEFS.map(({ key, label }) => ({ key, label })),
+        initialStatus: "idle",
+        initialSampleRate: "—",
+      })
+    : null;
 const pipelineOutputEls = new Map();
 const sampleButtons = SAMPLE_WAV_CONFIG.map(({ id, url, label }) => {
   const button = document.getElementById(id);
   return button ? { button, url, label } : null;
 }).filter(Boolean);
 
-// Dynamically create pipeline debug metrics
-function setupPipelineDebugMetrics() {
-  PIPELINE_DEFS.forEach((def) => {
-    const hzMetric = document.createElement("div");
-    hzMetric.className = "debug-metric";
-    const hzLabel = document.createElement("strong");
-    hzLabel.textContent = `${def.label} Hz:`;
-    const hzValue = document.createElement("span");
-    hzValue.id = `freq-${def.key}`;
-    hzValue.textContent = "—";
-    hzMetric.append(hzLabel, " ", hzValue);
-    debugMetricsEl.append(hzMetric);
-    freqEls.set(def.key, hzValue);
-
-    const statusMetric = document.createElement("div");
-    statusMetric.className = "debug-metric";
-    const statusLabel = document.createElement("strong");
-    statusLabel.textContent = `${def.label} status:`;
-    const statusValue = document.createElement("span");
-    statusValue.id = `status-${def.key}`;
-    statusValue.textContent = "—";
-    statusMetric.append(statusLabel, " ", statusValue);
-    debugMetricsEl.append(statusMetric);
-    pipelineStatusEls.set(def.key, statusValue);
-  });
-}
-
 function setSampleButtonsDisabled(disabled) {
   for (const entry of sampleButtons) entry.button.disabled = disabled;
 }
 
-setupPipelineDebugMetrics();
 setupOutputContainers();
 
 let recorder = null;
@@ -243,7 +222,10 @@ if (typeof MediaRecorder === "undefined") {
 }
 
 function setStatus(s) {
-  statusEl.textContent = s;
+  pipelineMetrics?.setGlobalStatus(s);
+}
+function setSampleRateDisplay(text) {
+  pipelineMetrics?.setSampleRate(text);
 }
 function bankLabel(idx) {
   if (BANK_LABEL_OVERRIDES.has(idx)) return BANK_LABEL_OVERRIDES.get(idx);
@@ -282,14 +264,16 @@ function formatFreq(f) {
   return (txt.endsWith(".0") ? txt.slice(0, -2) : txt) + " Hz";
 }
 function resetFreqDisplays() {
-  for (const el of freqEls.values()) el.textContent = "—";
+  pipelineMetrics?.resetPipelineFrequencies();
 }
 function resetPipelineStatuses() {
-  for (const el of pipelineStatusEls.values()) el.textContent = "—";
+  pipelineMetrics?.resetPipelineStatuses();
 }
 function setPipelineStatus(pipelineKey, text) {
-  const el = pipelineStatusEls.get(pipelineKey);
-  if (el) el.textContent = text;
+  pipelineMetrics?.setPipelineStatus(pipelineKey, text);
+}
+function setPipelineFrequency(pipelineKey, text) {
+  pipelineMetrics?.setPipelineFrequency(pipelineKey, text);
 }
 
 resetFreqDisplays();
@@ -660,7 +644,7 @@ async function cleanup(nextStatus, opts = {}) {
     } catch (_) {}
     audioCtx = null;
   }
-  srEl.textContent = "—";
+  setSampleRateDisplay("—");
   resetAllDecoders();
   resetFreqDisplays();
   resetPipelineStatuses();
@@ -679,7 +663,7 @@ async function initProcessingChain() {
   audioCtx = new (window.AudioContext || window.webkitAudioContext)({
     latencyHint: "interactive",
   });
-  srEl.textContent = audioCtx.sampleRate.toFixed(0) + " Hz";
+  setSampleRateDisplay(audioCtx.sampleRate.toFixed(0) + " Hz");
   const workletModuleUrl = new URL("./mb-fesk-worklet.js", import.meta.url);
   await audioCtx.audioWorklet.addModule(workletModuleUrl);
   pipelineStates.clear();
@@ -1039,12 +1023,11 @@ downloadBtn.addEventListener("click", () => {
 });
 
 function handlePipelineCandidates(def, results) {
-  const freqEl = freqEls.get(def.key);
   const dec = DEC.get(def.key);
   if (!dec) return;
 
   if (!Array.isArray(results) || !results.length) {
-    if (freqEl) freqEl.textContent = "—";
+    setPipelineFrequency(def.key, null);
     setPipelineStatus(def.key, "idle");
     return;
   }
@@ -1071,8 +1054,8 @@ function handlePipelineCandidates(def, results) {
         : Number.isFinite(baseFreqs[r.idx])
           ? baseFreqs[r.idx]
           : null;
-    if (freqEl && Number.isFinite(displayFreq)) {
-      freqEl.textContent = formatFreq(Number(displayFreq));
+    if (Number.isFinite(displayFreq)) {
+      setPipelineFrequency(def.key, formatFreq(Number(displayFreq)));
     }
 
     const threshold =
@@ -1107,7 +1090,7 @@ function handlePipelineCandidates(def, results) {
   }
 
   if (!hadActive) {
-    if (freqEl) freqEl.textContent = "—";
+    setPipelineFrequency(def.key, null);
     setPipelineStatus(def.key, "idle");
   } else if (!hadFrameOk && typeof pendingStatus === "string") {
     setStatus(pendingStatus);

@@ -158,18 +158,19 @@
         <button id="sample4Btn">Play Sample 4 🔊</button>
         <button id="sample5Btn">Play Sample 5 🔊</button>
       </div>
-      <div class="debug-metrics" id="debugMetrics">
-        <div class="debug-metric">
-          <strong>Overall status:</strong> <span id="status">idle</span>
-        </div>
-        <div class="debug-metric">
-          <strong>SR:</strong> <span id="sr">—</span>
-        </div>
-      </div>
+      <div class="debug-metrics" id="debugMetrics"></div>
     </div>
   </details>
   <div class="row"><strong>Decoded output:</strong></div>
   <div id="out"></div>
 </div>
 
+<script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1?dev",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?dev"
+    }
+  }
+</script>
 <script type="module" src="./app.js"></script>
