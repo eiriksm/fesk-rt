@@ -92,6 +92,23 @@ jobs:
     name: E2E tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: sample-buttons
+            spec: cypress/e2e/sample.cy.js
+          - name: mic-sample1
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/sample.wav
+            expectedText: test
+            recordDurationMs: 16000
+          - name: mic-sample4
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/sample4.wav
+            expectedText: "abc 123"
+            recordDurationMs: 16000
+            decodeTimeoutMs: 25000
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -104,18 +121,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run cypress tests
+      - name: Run cypress tests (${{ matrix.name }})
         uses: cypress-io/github-action@v6
         with:
           start: npm start
           wait-on: http://localhost:3000
           browser: chrome
+          spec: ${{ matrix.spec }}
         env:
           CYPRESS_baseUrl: http://localhost:3000
+          CYPRESS_fakeAudioCapture: ${{ matrix.fakeAudioCapture || '' }}
+          CYPRESS_expectedText: ${{ matrix.expectedText || '' }}
+          CYPRESS_recordDurationMs: ${{ matrix.recordDurationMs || '' }}
+          CYPRESS_decodeTimeoutMs: ${{ matrix.decodeTimeoutMs || '' }}
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: screenshots
+          name: screenshots-${{ matrix.name }}
           path: cypress/screenshots
           if-no-files-found: ignore
