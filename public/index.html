@@ -429,6 +429,7 @@
   }
 
   function setupOutputContainers() {
+    pipelineOutputEls.clear();
     outEl.textContent = "";
     PIPELINE_DEFS.forEach((def) => {
       const wrapper = document.createElement("div");
@@ -846,6 +847,7 @@
     resetAllDecoders();
     resetFreqDisplays();
     resetPipelineStatuses();
+    setupOutputContainers();
     pipelineTones.clear();
     suppressReadyStatus = false;
     if (typeof nextStatus === "string") setStatus(nextStatus);
