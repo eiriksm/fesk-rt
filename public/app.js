@@ -722,9 +722,9 @@ async function initProcessingChain() {
       hpCutoffHz: HP_CUTOFF_HZ,
     });
     console.info(
-      `[${def.label}] pipeline init (mic gain ×${(
-        micGainValue
-      ).toFixed(2)}, sample gain ×${sampleGainValue.toFixed(2)})`,
+      `[${def.label}] pipeline init (mic gain ×${micGainValue.toFixed(
+        2,
+      )}, sample gain ×${sampleGainValue.toFixed(2)})`,
     );
   }
 }
