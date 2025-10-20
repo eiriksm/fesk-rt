@@ -29,9 +29,7 @@ const ENERGY_ENVELOPE_MS = 6;
 const MIN_TONE_MS = 40;
 const HP_CUTOFF_HZ = 600;
 const SCORE_MIN = 0.2;
-const SCORE_MIN_BANK = FREQS_SETS.map((_, idx) =>
-  idx === 0 ? 0.28 : 0.18,
-);
+const SCORE_MIN_BANK = FREQS_SETS.map((_, idx) => (idx === 0 ? 0.28 : 0.18));
 const BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
 const BOOST_GAIN_MULTIPLIER = 10; // softer default boost
 const MIC_BASE_GAIN = 1;

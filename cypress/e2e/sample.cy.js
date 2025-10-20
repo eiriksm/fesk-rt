@@ -51,7 +51,7 @@ describe("FESK real time with known samples", () => {
       .should("contain.text", "abc 123");
   });
 
-  it('Should decode audio from sample 6', () => {
+  it("Should decode audio from sample 6", () => {
     cy.visit("/");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
