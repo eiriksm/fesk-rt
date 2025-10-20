@@ -1,14 +1,34 @@
-import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { Fragment } from "react";
-import { createRoot } from "react-dom/client";
+const { Fragment } = React;
+const { createRoot } = ReactDOM;
 function PipelineDebugMetricsView({ state, definitions, }) {
-    return (_jsxs(_Fragment, { children: [_jsxs("div", { className: "debug-metric", children: [_jsx("strong", { children: "Overall status:" }), " ", _jsx("span", { children: state.globalStatus })] }), _jsxs("div", { className: "debug-metric", children: [_jsx("strong", { children: "SR:" }), " ", _jsx("span", { children: state.sampleRate })] }), definitions.map((def) => {
-                const pipelineState = state.pipelines[def.key] ?? {
-                    frequencyText: "—",
-                    statusText: "—",
-                };
-                return (_jsxs(Fragment, { children: [_jsxs("div", { className: "debug-metric", children: [_jsxs("strong", { children: [def.label, " Hz:"] }), " ", _jsx("span", { children: pipelineState.frequencyText })] }), _jsxs("div", { className: "debug-metric", children: [_jsxs("strong", { children: [def.label, " status:"] }), " ", _jsx("span", { children: pipelineState.statusText })] })] }, def.key));
-            })] }));
+    return (React.createElement(React.Fragment, null,
+        React.createElement("div", { className: "debug-metric" },
+            React.createElement("strong", null, "Overall status:"),
+            " ",
+            React.createElement("span", null, state.globalStatus)),
+        React.createElement("div", { className: "debug-metric" },
+            React.createElement("strong", null, "SR:"),
+            " ",
+            React.createElement("span", null, state.sampleRate)),
+        definitions.map((def) => {
+            const pipelineState = state.pipelines[def.key] ?? {
+                frequencyText: "—",
+                statusText: "—",
+            };
+            return (React.createElement(Fragment, { key: def.key },
+                React.createElement("div", { className: "debug-metric" },
+                    React.createElement("strong", null,
+                        def.label,
+                        " Hz:"),
+                    " ",
+                    React.createElement("span", null, pipelineState.frequencyText)),
+                React.createElement("div", { className: "debug-metric" },
+                    React.createElement("strong", null,
+                        def.label,
+                        " status:"),
+                    " ",
+                    React.createElement("span", null, pipelineState.statusText))));
+        })));
 }
 export class PipelineDebugMetricsController {
     constructor({ container, pipelines, initialStatus = "", initialSampleRate = "", }) {
@@ -59,7 +79,7 @@ export class PipelineDebugMetricsController {
         this.render();
     }
     render() {
-        this.root.render(_jsx(PipelineDebugMetricsView, { state: this.state, definitions: this.definitions }));
+        this.root.render(React.createElement(PipelineDebugMetricsView, { state: this.state, definitions: this.definitions }));
     }
 }
 export function mountPipelineDebugMetrics(options) {

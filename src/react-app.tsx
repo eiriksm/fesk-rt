@@ -1,5 +1,10 @@
-import { Fragment } from "react";
-import { createRoot, Root } from "react-dom/client";
+import type { Root } from "react-dom/client";
+
+declare const React: typeof import("react");
+declare const ReactDOM: typeof import("react-dom/client");
+
+const { Fragment } = React;
+const { createRoot } = ReactDOM;
 
 export interface PipelineDefinition {
   key: string;
