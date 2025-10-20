@@ -10,28 +10,38 @@ const DETECTOR_CONFIG = FREQS_SETS.map((base, idx) => {
     harmonicMultipliers: [1, 2, 3, 4],
     detuneFactors: [0.99, 1, 1.01],
   };
+  if (idx === 1) {
+    config.detuneFactors = [0.97, 0.985, 1, 1.015, 1.03];
+  }
   if (idx === 3) {
     config.detuneFactors = [0.985, 0.995, 1, 1.005, 1.015];
     config.extra = [[11040.0], [11040.0]];
   }
   return config;
 });
-const ENERGY_FLOOR = 1e-6; // raise a bit if your room is noisy
+const ENERGY_FLOOR = 5e-7; // raise a bit if your room is noisy
 // Streaming tone detector parameters
-const ENERGY_ON = 1e-3;
-const ENERGY_OFF = 3e-4;
+const ENERGY_ON = 6e-4;
+const ENERGY_OFF = 2e-4;
 const MIN_GAP_MS = 5;
 const IGNORE_HEAD_MS = 6;
 const ENERGY_ENVELOPE_MS = 6;
 const MIN_TONE_MS = 40;
 const HP_CUTOFF_HZ = 600;
-const INPUT_GAIN = 12;
 const SCORE_MIN = 0.2;
-const SCORE_MIN_BANK = FREQS_SETS.map(() => 0.3);
+const SCORE_MIN_BANK = FREQS_SETS.map((_, idx) => (idx === 0 ? 0.28 : 0.18));
 const BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
-const BOOST_GAIN_MULTIPLIER = 26; // ≈ sample32_rms / sample4_rms
+const BOOST_GAIN_MULTIPLIER = 10; // softer default boost
+const MIC_BASE_GAIN = 1;
+const SAMPLE_BASE_GAIN = 1;
+const MIC_BOOST_GAIN = BOOST_GAIN_MULTIPLIER;
+const SAMPLE_BOOST_GAIN = BOOST_GAIN_MULTIPLIER;
+const EXTRA_GAIN_MULTIPLIER = BOOST_GAIN_MULTIPLIER * 2; // matches the old boost level (~20×)
+const MIC_EXTRA_GAIN = EXTRA_GAIN_MULTIPLIER;
+const SAMPLE_EXTRA_GAIN = EXTRA_GAIN_MULTIPLIER;
 const PIPELINE_BASE_DEFS = [];
 const PIPELINE_BOOST_DEFS = [];
+const PIPELINE_EXTRA_DEFS = [];
 FREQS_SETS.forEach((_, idx) => {
   const baseLabel = bankLabel(idx);
   PIPELINE_BASE_DEFS.push({
@@ -39,18 +49,31 @@ FREQS_SETS.forEach((_, idx) => {
     baseBankIndex: idx,
     label: `Bank ${baseLabel}`,
     shortLabel: `${baseLabel}`,
-    gainMultiplier: 1,
+    micGain: MIC_BASE_GAIN,
+    sampleGain: SAMPLE_BASE_GAIN,
   });
   PIPELINE_BOOST_DEFS.push({
     key: `bank-${idx}-boost`,
     baseBankIndex: idx,
     label: `Bank ${baseLabel} boost`,
     shortLabel: `${baseLabel}+`,
-    gainMultiplier: BOOST_GAIN_MULTIPLIER,
-    isBoost: true,
+    micGain: MIC_BOOST_GAIN,
+    sampleGain: SAMPLE_BOOST_GAIN,
+  });
+  PIPELINE_EXTRA_DEFS.push({
+    key: `bank-${idx}-extra`,
+    baseBankIndex: idx,
+    label: `Bank ${baseLabel} extra boost`,
+    shortLabel: `${baseLabel}++`,
+    micGain: MIC_EXTRA_GAIN,
+    sampleGain: SAMPLE_EXTRA_GAIN,
   });
 });
-const PIPELINE_DEFS = [...PIPELINE_BASE_DEFS, ...PIPELINE_BOOST_DEFS];
+const PIPELINE_DEFS = [
+  ...PIPELINE_BASE_DEFS,
+  ...PIPELINE_BOOST_DEFS,
+  ...PIPELINE_EXTRA_DEFS,
+];
 const PIPELINE_BY_KEY = new Map(PIPELINE_DEFS.map((def) => [def.key, def]));
 const PIPELINE_THRESHOLD = new Map(
   PIPELINE_DEFS.map((def) => [
@@ -68,6 +91,7 @@ const SAMPLE_WAV_CONFIG = [
     label: "4",
   },
   { id: "sample5Btn", url: "sample-clock-on-laptop.wav", label: "5" },
+  { id: "sample6Btn", url: "sample-clock-recorder-on-phone.wav", label: "6" },
 ];
 const CODE_BITS = 6;
 const CRC_BITS = 8;
@@ -107,20 +131,21 @@ const CODE_MAP = new Array(64).fill(null);
   [23, "x"],
   [24, "y"],
   [25, "z"],
-  [26, "1"],
-  [27, "2"],
-  [28, "3"],
-  [29, "4"],
-  [30, "5"],
-  [31, "6"],
-  [32, "7"],
-  [33, "8"],
-  [34, "9"],
-  [35, " "],
-  [36, ","],
-  [37, ":"],
-  [38, "'"],
-  [39, '"'],
+  [26, "0"],
+  [27, "1"],
+  [28, "2"],
+  [29, "3"],
+  [30, "4"],
+  [31, "5"],
+  [32, "6"],
+  [33, "7"],
+  [34, "8"],
+  [35, "9"],
+  [36, " "],
+  [37, ","],
+  [38, ":"],
+  [39, "'"],
+  [40, '"'],
 ].forEach(([code, ch]) => {
   CODE_MAP[code] = ch;
 });
@@ -611,6 +636,16 @@ function disconnectNodeFromPipelines(node, type) {
   }
 }
 
+function triggerAutoStop(label) {
+  if (autoStopTriggered) return;
+  if (stopBtn.disabled) return;
+  autoStopTriggered = true;
+  console.info(`[${label}] auto stop after CRC OK`);
+  queueMicrotask(() => {
+    if (!stopBtn.disabled) stopBtn.click();
+  });
+}
+
 async function cleanup(nextStatus, opts = {}) {
   const { skipRecorderStop = false } = opts;
   if (!skipRecorderStop) {
@@ -666,6 +701,7 @@ async function cleanup(nextStatus, opts = {}) {
   resetPipelineStatuses();
   pipelineTones.clear();
   suppressReadyStatus = false;
+  autoStopTriggered = false;
   if (typeof nextStatus === "string") setStatus(nextStatus);
 }
 
@@ -689,10 +725,18 @@ async function initProcessingChain() {
       numberOfOutputs: 0,
     });
     const micGainNode = audioCtx.createGain();
-    micGainNode.gain.value = INPUT_GAIN * def.gainMultiplier;
+    const micGainValue =
+      Number.isFinite(def.micGain) && def.micGain > 0
+        ? def.micGain
+        : MIC_BASE_GAIN;
+    micGainNode.gain.value = micGainValue;
     micGainNode.connect(workletNode);
     const sampleGainNode = audioCtx.createGain();
-    sampleGainNode.gain.value = def.gainMultiplier;
+    const sampleGainValue =
+      Number.isFinite(def.sampleGain) && def.sampleGain > 0
+        ? def.sampleGain
+        : SAMPLE_BASE_GAIN;
+    sampleGainNode.gain.value = sampleGainValue;
     sampleGainNode.connect(workletNode);
     setPipelineStatus(def.key, "initializing…");
     const state = {
@@ -700,6 +744,8 @@ async function initProcessingChain() {
       workletNode,
       micGainNode,
       sampleGainNode,
+      micGainValue,
+      sampleGainValue,
       ready: false,
     };
     pipelineStates.set(def.key, state);
@@ -717,9 +763,9 @@ async function initProcessingChain() {
       hpCutoffHz: HP_CUTOFF_HZ,
     });
     console.info(
-      `[${def.label}] pipeline init (mic gain ×${(
-        INPUT_GAIN * def.gainMultiplier
-      ).toFixed(2)}, sample gain ×${def.gainMultiplier.toFixed(2)})`,
+      `[${def.label}] pipeline init (mic gain ×${micGainValue.toFixed(
+        2,
+      )}, sample gain ×${sampleGainValue.toFixed(2)})`,
     );
   }
 }
@@ -739,9 +785,9 @@ function handleWorkletMessage(state, message) {
         : "";
     setPipelineStatus(def.key, sr ? `ready (${sr})` : "ready");
     console.info(
-      `[${def.label}] worklet ready (mic gain ×${(
-        INPUT_GAIN * def.gainMultiplier
-      ).toFixed(2)}, sample gain ×${def.gainMultiplier.toFixed(2)})`,
+      `[${def.label}] worklet ready (mic gain ×${state.micGainValue.toFixed(
+        2,
+      )}, sample gain ×${state.sampleGainValue.toFixed(2)})`,
     );
     if (!suppressReadyStatus && allPipelinesReady()) {
       setStatus("ready");
@@ -885,6 +931,7 @@ let bufferSrc = null;
 let suppressReadyStatus = false;
 const pipelineStates = new Map();
 const pipelineReadyWaiters = new Set();
+let autoStopTriggered = false;
 
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
@@ -1083,7 +1130,12 @@ function handlePipelineCandidates(def, results) {
     if (!out) continue;
 
     if (out.ok && out.okCRC && out.text) {
-      setStatus(`frame OK (${def.label})`);
+      const shouldAutoStop = !autoStopTriggered && !stopBtn.disabled;
+      setStatus(
+        shouldAutoStop
+          ? `frame OK (${def.label}) — stopping…`
+          : `frame OK (${def.label})`,
+      );
       setPipelineStatus(def.key, "frame OK");
       const avgScore = Number.isFinite(out.avgScore)
         ? out.avgScore.toFixed(3)
@@ -1091,6 +1143,7 @@ function handlePipelineCandidates(def, results) {
       console.info(
         `[${def.label}] frame OK: "${out.text}" (avg score ${avgScore})`,
       );
+      if (shouldAutoStop) triggerAutoStop(def.label);
       hadFrameOk = true;
       pendingStatus = null;
     } else if (!out.okCRC) {

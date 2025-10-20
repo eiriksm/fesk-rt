@@ -10,7 +10,7 @@ describe("FESK real time Test", () => {
 
     cy.get("#startBtn", { timeout: 10000 }).click();
     cy.wait(recordDurationMs);
-    cy.get("#stopBtn").click();
+    // At this point should auto-stop, since we passed the CRC.
     cy.get("#out .decoded-ok", { timeout: decodeTimeoutMs })
       .should("not.be.empty")
       .should("contain.text", expectedText);

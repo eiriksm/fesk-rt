@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Select the node version
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
 
@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Select the node version
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
 
@@ -58,7 +58,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Select the node version
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
 
@@ -78,7 +78,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Select the node version
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
 
@@ -103,28 +103,55 @@ jobs:
             fakeAudioCapture: public/sample.wav
             expectedText: test
             recordDurationMs: 16000
+          - name: mic-sample2
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/sample2.wav
+            # At the time of recording, this used to decode to "abc 123". Then, after I added it here
+            # I realized I forgot to include the "0" character, so I shifted the entire protocol by one.
+            # So yeah, now it reads "abc9012", but I won't re-record it now. It proves the point, yeah?
+            expectedText: "abc9012"
+            recordDurationMs: 27000
+          - name: mic-sample3
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/sample32.wav
+            expectedText: "abc9012"
+            recordDurationMs: 17000
           - name: mic-sample4
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/sample4.wav
-            expectedText: "abc 123"
+            expectedText: "abc9012"
             recordDurationMs: 16000
-            decodeTimeoutMs: 25000
+          - name: mic-sample5
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/sample-clock-on-laptop.wav
+            expectedText: "abc9012"
+            recordDurationMs: 17000
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
       - name: Select the node version
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
 
+      - name: Cache depedencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache
+            ~/.npm
+          key: ${{ runner.os }}-cypress-${{ hashFiles('package-lock.json') }}
+
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Run cypress tests (${{ matrix.name }})
         uses: cypress-io/github-action@v6
         with:
-          start: npm start
+          start: python -m http.server 3000 -d ./public
+          # We just installed in the last step.
+          install: false
           wait-on: http://localhost:3000
           browser: chrome
           spec: ${{ matrix.spec }}
