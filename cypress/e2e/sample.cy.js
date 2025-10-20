@@ -1,5 +1,10 @@
 /// <reference types="cypress" />
 
+// At the time of recording, this used to decode to "abc 123". Then, after I added it here
+// I realized I forgot to include the "0" character, so I shifted the entire protocol by one.
+// So yeah, now it reads "abc9012", but I won't re-record it now. It proves the point, yeah?
+const THAT_REPEATING_TEST_DECODING = "abc9012";
+
 describe("FESK real time with known samples", () => {
   it("should decode audio from sample 1", () => {
     cy.visit("/");
@@ -18,7 +23,7 @@ describe("FESK real time with known samples", () => {
     cy.get("#sample2Btn").click();
     cy.get("#out .decoded-ok", { timeout: 30000 })
       .should("not.be.empty")
-      .should("contain.text", "abc 123");
+      .should("contain.text", THAT_REPEATING_TEST_DECODING);
   });
 
   it("should decode audio from sample 3", () => {
@@ -28,7 +33,7 @@ describe("FESK real time with known samples", () => {
     cy.get("#sample3Btn").click();
     cy.get("#out .decoded-ok", { timeout: 40000 })
       .should("not.be.empty")
-      .should("contain.text", "abc 123");
+      .should("contain.text", THAT_REPEATING_TEST_DECODING);
   });
 
   it("should decode audio from sample 4", () => {
@@ -38,7 +43,7 @@ describe("FESK real time with known samples", () => {
     cy.get("#sample4Btn").click();
     cy.get("#out .decoded-ok", { timeout: 18000 })
       .should("not.be.empty")
-      .should("contain.text", "abc 123");
+      .should("contain.text", THAT_REPEATING_TEST_DECODING);
   });
 
   it("should decode audio from sample 5", () => {
@@ -48,7 +53,7 @@ describe("FESK real time with known samples", () => {
     cy.get("#sample5Btn").click();
     cy.get("#out .decoded-ok", { timeout: 60000 })
       .should("not.be.empty")
-      .should("contain.text", "abc 123");
+      .should("contain.text", THAT_REPEATING_TEST_DECODING);
   });
 
   it("Should decode audio from sample 6", () => {
@@ -58,6 +63,6 @@ describe("FESK real time with known samples", () => {
     cy.get("#sample6Btn").click();
     cy.get("#out .decoded-ok", { timeout: 60000 })
       .should("not.be.empty")
-      .should("contain.text", "abc 123");
+      .should("contain.text", THAT_REPEATING_TEST_DECODING);
   });
 });

@@ -106,22 +106,25 @@ jobs:
           - name: mic-sample2
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/sample2.wav
-            expectedText: "abc 123"
+            # At the time of recording, this used to decode to "abc 123". Then, after I added it here
+            # I realized I forgot to include the "0" character, so I shifted the entire protocol by one.
+            # So yeah, now it reads "abc9012", but I won't re-record it now. It proves the point, yeah?
+            expectedText: "abc9012"
             recordDurationMs: 27000
           - name: mic-sample3
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/sample32.wav
-            expectedText: "abc 123"
+            expectedText: "abc9012"
             recordDurationMs: 17000
           - name: mic-sample4
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/sample4.wav
-            expectedText: "abc 123"
+            expectedText: "abc9012"
             recordDurationMs: 16000
           - name: mic-sample5
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/sample-clock-on-laptop.wav
-            expectedText: "abc 123"
+            expectedText: "abc9012"
             recordDurationMs: 17000
     steps:
       - name: Checkout repository
