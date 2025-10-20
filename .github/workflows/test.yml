@@ -146,7 +146,7 @@ jobs:
       - name: Run cypress tests (${{ matrix.name }})
         uses: cypress-io/github-action@v6
         with:
-          start: npm start
+          start: cd public && python -m http.server 3000
           # We just installed in the last step.
           install: false
           wait-on: http://localhost:3000
