@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "cypress": "^15.5.0",
-    "eslint": "^9.37.0",
+    "eslint": "^9.38.0",
     "prettier": "^3.6.2"
   }
 }
