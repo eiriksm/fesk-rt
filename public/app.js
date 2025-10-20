@@ -25,11 +25,12 @@ const IGNORE_HEAD_MS = 6;
 const ENERGY_ENVELOPE_MS = 6;
 const MIN_TONE_MS = 40;
 const HP_CUTOFF_HZ = 600;
-const INPUT_GAIN = 12;
 const SCORE_MIN = 0.2;
 const SCORE_MIN_BANK = FREQS_SETS.map(() => 0.3);
 const BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
 const BOOST_GAIN_MULTIPLIER = 26; // ≈ sample32_rms / sample4_rms
+const MIC_BASE_GAIN = 1;
+const MIC_BOOST_GAIN = BOOST_GAIN_MULTIPLIER;
 const PIPELINE_BASE_DEFS = [];
 const PIPELINE_BOOST_DEFS = [];
 FREQS_SETS.forEach((_, idx) => {
@@ -689,10 +690,12 @@ async function initProcessingChain() {
       numberOfOutputs: 0,
     });
     const micGainNode = audioCtx.createGain();
-    micGainNode.gain.value = INPUT_GAIN * def.gainMultiplier;
+    const micGainValue = def.isBoost ? MIC_BOOST_GAIN : MIC_BASE_GAIN;
+    micGainNode.gain.value = micGainValue;
     micGainNode.connect(workletNode);
     const sampleGainNode = audioCtx.createGain();
-    sampleGainNode.gain.value = def.gainMultiplier;
+    const sampleGainValue = def.gainMultiplier;
+    sampleGainNode.gain.value = sampleGainValue;
     sampleGainNode.connect(workletNode);
     setPipelineStatus(def.key, "initializing…");
     const state = {
@@ -700,6 +703,8 @@ async function initProcessingChain() {
       workletNode,
       micGainNode,
       sampleGainNode,
+      micGainValue,
+      sampleGainValue,
       ready: false,
     };
     pipelineStates.set(def.key, state);
@@ -717,9 +722,9 @@ async function initProcessingChain() {
       hpCutoffHz: HP_CUTOFF_HZ,
     });
     console.info(
-      `[${def.label}] pipeline init (mic gain ×${(
-        INPUT_GAIN * def.gainMultiplier
-      ).toFixed(2)}, sample gain ×${def.gainMultiplier.toFixed(2)})`,
+      `[${def.label}] pipeline init (mic gain ×${micGainValue.toFixed(
+        2,
+      )}, sample gain ×${sampleGainValue.toFixed(2)})`,
     );
   }
 }
@@ -739,9 +744,9 @@ function handleWorkletMessage(state, message) {
         : "";
     setPipelineStatus(def.key, sr ? `ready (${sr})` : "ready");
     console.info(
-      `[${def.label}] worklet ready (mic gain ×${(
-        INPUT_GAIN * def.gainMultiplier
-      ).toFixed(2)}, sample gain ×${def.gainMultiplier.toFixed(2)})`,
+      `[${def.label}] worklet ready (mic gain ×${state.micGainValue.toFixed(
+        2,
+      )}, sample gain ×${state.sampleGainValue.toFixed(2)})`,
     );
     if (!suppressReadyStatus && allPipelinesReady()) {
       setStatus("ready");
