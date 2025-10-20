@@ -7,7 +7,8 @@
     "cypress:run": "cypress run",
     "start": "npx -y serve public",
     "prettier-check": "prettier --check public/*.js cypress/**/*.js",
-    "build": "tsc"
+    "build": "npm run typecheck && vite build",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "cypress": "^15.4.0",
@@ -17,6 +18,8 @@
     "@types/react-dom": "^18.3.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.10"
   }
 }

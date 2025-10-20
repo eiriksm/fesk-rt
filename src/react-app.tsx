@@ -1,10 +1,5 @@
-import type { Root } from "react-dom/client";
-
-declare const React: typeof import("react");
-declare const ReactDOM: typeof import("react-dom/client");
-
-const { Fragment } = React;
-const { createRoot } = ReactDOM;
+import { Fragment } from "react";
+import { createRoot, type Root } from "react-dom/client";
 
 export interface PipelineDefinition {
   key: string;
@@ -48,7 +43,7 @@ function PipelineDebugMetricsView({
         const pipelineState = state.pipelines[def.key] ?? {
           frequencyText: "—",
           statusText: "—",
-        };
+        } satisfies PipelineMetricState;
         return (
           <Fragment key={def.key}>
             <div className="debug-metric">
@@ -83,10 +78,13 @@ export class PipelineDebugMetricsController {
       globalStatus: initialStatus,
       sampleRate: initialSampleRate,
       pipelines: Object.fromEntries(
-        pipelines.map((pipeline) => [pipeline.key, {
-          frequencyText: "—",
-          statusText: "—",
-        } satisfies PipelineMetricState]),
+        pipelines.map((pipeline) => [
+          pipeline.key,
+          {
+            frequencyText: "—",
+            statusText: "—",
+          } satisfies PipelineMetricState,
+        ]),
       ),
     };
     this.render();
