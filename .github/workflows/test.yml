@@ -118,6 +118,11 @@ jobs:
             fakeAudioCapture: public/sample4.wav
             expectedText: "abc 123"
             recordDurationMs: 16000
+          - name: mic-sample5
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/sample-clock-on-laptop.wav
+            expectedText: "abc 123"
+            recordDurationMs: 17000
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
