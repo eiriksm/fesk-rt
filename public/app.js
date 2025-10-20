@@ -29,10 +29,16 @@ const SCORE_MIN = 0.2;
 const SCORE_MIN_BANK = FREQS_SETS.map(() => 0.3);
 const BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
 const BOOST_GAIN_MULTIPLIER = 26; // ≈ sample32_rms / sample4_rms
+const EXTRA_INPUT_GAIN = 12; // previous shared input gain
 const MIC_BASE_GAIN = 1;
+const SAMPLE_BASE_GAIN = 1;
 const MIC_BOOST_GAIN = BOOST_GAIN_MULTIPLIER;
+const SAMPLE_BOOST_GAIN = BOOST_GAIN_MULTIPLIER;
+const MIC_EXTRA_GAIN = EXTRA_INPUT_GAIN * BOOST_GAIN_MULTIPLIER;
+const SAMPLE_EXTRA_GAIN = EXTRA_INPUT_GAIN * BOOST_GAIN_MULTIPLIER;
 const PIPELINE_BASE_DEFS = [];
 const PIPELINE_BOOST_DEFS = [];
+const PIPELINE_EXTRA_DEFS = [];
 FREQS_SETS.forEach((_, idx) => {
   const baseLabel = bankLabel(idx);
   PIPELINE_BASE_DEFS.push({
@@ -40,18 +46,31 @@ FREQS_SETS.forEach((_, idx) => {
     baseBankIndex: idx,
     label: `Bank ${baseLabel}`,
     shortLabel: `${baseLabel}`,
-    gainMultiplier: 1,
+    micGain: MIC_BASE_GAIN,
+    sampleGain: SAMPLE_BASE_GAIN,
   });
   PIPELINE_BOOST_DEFS.push({
     key: `bank-${idx}-boost`,
     baseBankIndex: idx,
     label: `Bank ${baseLabel} boost`,
     shortLabel: `${baseLabel}+`,
-    gainMultiplier: BOOST_GAIN_MULTIPLIER,
-    isBoost: true,
+    micGain: MIC_BOOST_GAIN,
+    sampleGain: SAMPLE_BOOST_GAIN,
+  });
+  PIPELINE_EXTRA_DEFS.push({
+    key: `bank-${idx}-extra`,
+    baseBankIndex: idx,
+    label: `Bank ${baseLabel} extra boost`,
+    shortLabel: `${baseLabel}++`,
+    micGain: MIC_EXTRA_GAIN,
+    sampleGain: SAMPLE_EXTRA_GAIN,
   });
 });
-const PIPELINE_DEFS = [...PIPELINE_BASE_DEFS, ...PIPELINE_BOOST_DEFS];
+const PIPELINE_DEFS = [
+  ...PIPELINE_BASE_DEFS,
+  ...PIPELINE_BOOST_DEFS,
+  ...PIPELINE_EXTRA_DEFS,
+];
 const PIPELINE_BY_KEY = new Map(PIPELINE_DEFS.map((def) => [def.key, def]));
 const PIPELINE_THRESHOLD = new Map(
   PIPELINE_DEFS.map((def) => [
@@ -690,11 +709,17 @@ async function initProcessingChain() {
       numberOfOutputs: 0,
     });
     const micGainNode = audioCtx.createGain();
-    const micGainValue = def.isBoost ? MIC_BOOST_GAIN : MIC_BASE_GAIN;
+    const micGainValue =
+      Number.isFinite(def.micGain) && def.micGain > 0
+        ? def.micGain
+        : MIC_BASE_GAIN;
     micGainNode.gain.value = micGainValue;
     micGainNode.connect(workletNode);
     const sampleGainNode = audioCtx.createGain();
-    const sampleGainValue = def.gainMultiplier;
+    const sampleGainValue =
+      Number.isFinite(def.sampleGain) && def.sampleGain > 0
+        ? def.sampleGain
+        : SAMPLE_BASE_GAIN;
     sampleGainNode.gain.value = sampleGainValue;
     sampleGainNode.connect(workletNode);
     setPipelineStatus(def.key, "initializing…");
