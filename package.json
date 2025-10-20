@@ -5,7 +5,7 @@
   "scripts": {
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
-    "start": "npx -y serve public",
+    "start": "npm run build && npx -y serve public",
     "prettier-check": "prettier --check public/*.js cypress/**/*.js",
     "build": "npm run typecheck && vite build",
     "typecheck": "tsc --noEmit"
