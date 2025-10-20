@@ -635,6 +635,16 @@ function disconnectNodeFromPipelines(node, type) {
   }
 }
 
+function triggerAutoStop(label) {
+  if (autoStopTriggered) return;
+  if (stopBtn.disabled) return;
+  autoStopTriggered = true;
+  console.info(`[${label}] auto stop after CRC OK`);
+  queueMicrotask(() => {
+    if (!stopBtn.disabled) stopBtn.click();
+  });
+}
+
 async function cleanup(nextStatus, opts = {}) {
   const { skipRecorderStop = false } = opts;
   if (!skipRecorderStop) {
@@ -690,6 +700,7 @@ async function cleanup(nextStatus, opts = {}) {
   resetPipelineStatuses();
   pipelineTones.clear();
   suppressReadyStatus = false;
+  autoStopTriggered = false;
   if (typeof nextStatus === "string") setStatus(nextStatus);
 }
 
@@ -919,6 +930,7 @@ let bufferSrc = null;
 let suppressReadyStatus = false;
 const pipelineStates = new Map();
 const pipelineReadyWaiters = new Set();
+let autoStopTriggered = false;
 
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
@@ -1117,7 +1129,12 @@ function handlePipelineCandidates(def, results) {
     if (!out) continue;
 
     if (out.ok && out.okCRC && out.text) {
-      setStatus(`frame OK (${def.label})`);
+      const shouldAutoStop = !autoStopTriggered && !stopBtn.disabled;
+      setStatus(
+        shouldAutoStop
+          ? `frame OK (${def.label}) — stopping…`
+          : `frame OK (${def.label})`,
+      );
       setPipelineStatus(def.key, "frame OK");
       const avgScore = Number.isFinite(out.avgScore)
         ? out.avgScore.toFixed(3)
@@ -1125,6 +1142,7 @@ function handlePipelineCandidates(def, results) {
       console.info(
         `[${def.label}] frame OK: "${out.text}" (avg score ${avgScore})`,
       );
+      if (shouldAutoStop) triggerAutoStop(def.label);
       hadFrameOk = true;
       pendingStatus = null;
     } else if (!out.okCRC) {
