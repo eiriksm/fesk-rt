@@ -132,13 +132,23 @@ jobs:
         with:
           node-version-file: '.nvmrc'
 
+      - name: Cache depedencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: ${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Run cypress tests (${{ matrix.name }})
         uses: cypress-io/github-action@v6
         with:
           start: npm start
+          # We just installed in the last step.
+          install: false
           wait-on: http://localhost:3000
           browser: chrome
           spec: ${{ matrix.spec }}
