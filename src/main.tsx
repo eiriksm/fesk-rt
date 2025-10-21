@@ -1,3 +1,9 @@
+// @ts-nocheck
+import React from "react";
+import { createRoot } from "react-dom/client";
+
+import { DebugMetrics } from "./components/DebugMetrics";
+
 const pipelineTones = new Map();
 // =================== CONFIG ===================
 const FREQS_SETS = [
@@ -210,7 +216,6 @@ const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
-const debugMetricsEl = document.getElementById("debugMetrics");
 const freqEls = new Map();
 const pipelineStatusEls = new Map();
 const pipelineOutputEls = new Map();
@@ -219,38 +224,55 @@ const sampleButtons = SAMPLE_WAV_CONFIG.map(({ id, url, label }) => {
   return button ? { button, url, label } : null;
 }).filter(Boolean);
 
-// Dynamically create pipeline debug metrics
-function setupPipelineDebugMetrics() {
-  PIPELINE_DEFS.forEach((def) => {
-    const hzMetric = document.createElement("div");
-    hzMetric.className = "debug-metric";
-    const hzLabel = document.createElement("strong");
-    hzLabel.textContent = `${def.label} Hz:`;
-    const hzValue = document.createElement("span");
-    hzValue.id = `freq-${def.key}`;
-    hzValue.textContent = "—";
-    hzMetric.append(hzLabel, " ", hzValue);
-    debugMetricsEl.append(hzMetric);
-    freqEls.set(def.key, hzValue);
+const pipelineDebugMetricsContainer = document.getElementById(
+  "pipelineDebugMetrics",
+);
 
-    const statusMetric = document.createElement("div");
-    statusMetric.className = "debug-metric";
-    const statusLabel = document.createElement("strong");
-    statusLabel.textContent = `${def.label} status:`;
-    const statusValue = document.createElement("span");
-    statusValue.id = `status-${def.key}`;
-    statusValue.textContent = "—";
-    statusMetric.append(statusLabel, " ", statusValue);
-    debugMetricsEl.append(statusMetric);
-    pipelineStatusEls.set(def.key, statusValue);
+if (pipelineDebugMetricsContainer) {
+  const definitions = PIPELINE_DEFS.map((def) => ({
+    key: def.key,
+    label: def.label,
+  }));
+  const root = createRoot(pipelineDebugMetricsContainer);
+  root.render(
+    <DebugMetrics
+      definitions={definitions}
+      onReady={hydratePipelineDebugMetricRefs}
+    />,
+  );
+}
+
+function hydratePipelineDebugMetricRefs() {
+  freqEls.clear();
+  pipelineStatusEls.clear();
+
+  let found = false;
+
+  PIPELINE_DEFS.forEach((def) => {
+    const freqEl = document.getElementById(`freq-${def.key}`);
+    if (freqEl) {
+      freqEls.set(def.key, freqEl);
+      found = true;
+    }
+
+    const statusEl = document.getElementById(`status-${def.key}`);
+    if (statusEl) {
+      pipelineStatusEls.set(def.key, statusEl);
+      found = true;
+    }
   });
+
+  if (found) {
+    resetFreqDisplays();
+    resetPipelineStatuses();
+  }
 }
 
 function setSampleButtonsDisabled(disabled) {
   for (const entry of sampleButtons) entry.button.disabled = disabled;
 }
 
-setupPipelineDebugMetrics();
+hydratePipelineDebugMetricRefs();
 setupOutputContainers();
 
 let recorder = null;
@@ -718,7 +740,7 @@ async function initProcessingChain() {
     latencyHint: "interactive",
   });
   srEl.textContent = audioCtx.sampleRate.toFixed(0) + " Hz";
-  const workletModuleUrl = new URL("./mb-fesk-worklet.js", import.meta.url);
+  const workletModuleUrl = new URL("/mb-fesk-worklet.js", import.meta.url);
   await audioCtx.audioWorklet.addModule(workletModuleUrl);
   pipelineStates.clear();
   for (const def of PIPELINE_DEFS) {
