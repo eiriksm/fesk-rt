@@ -83,6 +83,6 @@ describe("FESK real time with known samples", () => {
     cy.get("#sample8Btn").click();
     cy.get("#out .decoded-ok", { timeout: 60000 })
       .should("not.be.empty")
-      .should("contain.text", "the quick brown fox jumps over the lazy dog");
+      .should("contain.text", "uptime 2888 seconds");
   });
 });
