@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 export interface DebugMetricDefinition {
   key: string;
@@ -7,9 +7,14 @@ export interface DebugMetricDefinition {
 
 interface DebugMetricsProps {
   definitions: DebugMetricDefinition[];
+  onReady?: () => void;
 }
 
-export function DebugMetrics({ definitions }: DebugMetricsProps) {
+export function DebugMetrics({ definitions, onReady }: DebugMetricsProps) {
+  useEffect(() => {
+    onReady?.();
+  }, [onReady]);
+
   return (
     <>
       {definitions.map((def) => (

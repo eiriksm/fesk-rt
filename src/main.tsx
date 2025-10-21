@@ -232,10 +232,12 @@ if (pipelineDebugMetricsContainer) {
     label: def.label,
   }));
   const root = createRoot(pipelineDebugMetricsContainer);
-  root.render(<DebugMetrics definitions={definitions} />);
-  queueMicrotask(() => {
-    hydratePipelineDebugMetricRefs();
-  });
+  root.render(
+    <DebugMetrics
+      definitions={definitions}
+      onReady={hydratePipelineDebugMetricRefs}
+    />,
+  );
 }
 
 function hydratePipelineDebugMetricRefs() {
