@@ -92,6 +92,7 @@ const SAMPLE_WAV_CONFIG = [
   },
   { id: "sample5Btn", url: "sample-clock-on-laptop.wav", label: "5" },
   { id: "sample6Btn", url: "sample-clock-recorder-on-phone.wav", label: "6" },
+  { id: "sample7Btn", url: "sample-fast.wav", label: "7" },
 ];
 const CODE_BITS = 6;
 const CRC_BITS = 8;
