@@ -146,6 +146,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Build web bundle
+        run: npm run build
+
       - name: Run cypress tests (${{ matrix.name }})
         uses: cypress-io/github-action@v6
         with:
