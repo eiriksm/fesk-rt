@@ -3,14 +3,23 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "cypress:open": "cypress open",
-    "cypress:run": "cypress run",
-    "start": "npx -y serve public",
-    "prettier-check": "prettier --check public/*.js cypress/**/*.js"
+    "build": "node scripts/build.mjs",
+    "cypress:open": "npm run build && cypress open",
+    "cypress:run": "npm run build && cypress run",
+    "start": "npm run build && npx -y serve public",
+    "prettier-check": "prettier --check \"src/**/*.{ts,tsx}\" cypress/**/*.js"
   },
   "devDependencies": {
+    "@types/react": "^18.3.14",
+    "@types/react-dom": "^18.3.1",
     "cypress": "^15.5.0",
+    "esbuild": "^0.24.0",
     "eslint": "^9.38.0",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }
