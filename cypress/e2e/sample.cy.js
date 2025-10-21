@@ -75,4 +75,14 @@ describe("FESK real time with known samples", () => {
       .should("not.be.empty")
       .should("contain.text", "hello from fesk");
   });
+
+  it("Should decode audio from sample 8", () => {
+    cy.visit("/");
+
+    cy.get(".debug-panel summary", { timeout: 10000 }).click();
+    cy.get("#sample8Btn").click();
+    cy.get("#out .decoded-ok", { timeout: 60000 })
+      .should("not.be.empty")
+      .should("contain.text", "uptime 2888 seconds");
+  });
 });
