@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.mjs",
-    "cypress:open": "npm run build && cypress open",
-    "cypress:run": "npm run build && cypress run",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
     "start": "npm run build && npx -y serve public",
     "prettier-check": "prettier --check \"src/**/*.{ts,tsx}\" cypress/**/*.js"
   },

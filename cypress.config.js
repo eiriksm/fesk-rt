@@ -1,5 +1,6 @@
 import { defineConfig } from 'cypress'
-import path from 'path'
+import path from 'node:path'
+import { execSync } from 'node:child_process'
 
 export default defineConfig({
   e2e: {
@@ -7,6 +8,10 @@ export default defineConfig({
     supportFile: 'cypress/support/e2e.js',
     specPattern: 'cypress/e2e/**/*.cy.js',
     setupNodeEvents(on, config) {
+      on('before:run', () => {
+        execSync('npm run build', { stdio: 'inherit' })
+      })
+
       on('before:browser:launch', (browser = {}, launchOptions) => {
         if (browser.family === 'chromium') {
           launchOptions.args.push('--use-fake-ui-for-media-stream')

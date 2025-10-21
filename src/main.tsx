@@ -222,14 +222,16 @@ const sampleButtons = SAMPLE_WAV_CONFIG.map(({ id, url, label }) => {
   return button ? { button, url, label } : null;
 }).filter(Boolean);
 
-const debugMetricsContainer = document.getElementById("debugMetrics");
+const pipelineDebugMetricsContainer = document.getElementById(
+  "pipelineDebugMetrics",
+);
 
-if (debugMetricsContainer) {
+if (pipelineDebugMetricsContainer) {
   const definitions = PIPELINE_DEFS.map((def) => ({
     key: def.key,
     label: def.label,
   }));
-  const root = createRoot(debugMetricsContainer);
+  const root = createRoot(pipelineDebugMetricsContainer);
   root.render(<DebugMetrics definitions={definitions} />);
   queueMicrotask(() => {
     hydratePipelineDebugMetricRefs();
