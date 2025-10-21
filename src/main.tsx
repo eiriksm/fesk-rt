@@ -738,7 +738,7 @@ async function initProcessingChain() {
     latencyHint: "interactive",
   });
   srEl.textContent = audioCtx.sampleRate.toFixed(0) + " Hz";
-  const workletModuleUrl = new URL("./mb-fesk-worklet.js", import.meta.url);
+  const workletModuleUrl = new URL("/mb-fesk-worklet.js", import.meta.url);
   await audioCtx.audioWorklet.addModule(workletModuleUrl);
   pipelineStates.clear();
   for (const def of PIPELINE_DEFS) {
