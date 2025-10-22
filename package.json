@@ -13,7 +13,7 @@
   },
   "devDependencies": {
     "@types/react": "^18.3.14",
-    "@types/react-dom": "^18.3.1",
+    "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.0.4",
     "cypress": "^15.5.0",
     "eslint": "^9.38.0",
@@ -23,6 +23,6 @@
   },
   "dependencies": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^19.2.0"
   }
 }
