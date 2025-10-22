@@ -52,5 +52,34 @@ character that can appear in decoded output.
 | `'` | `100111` | 39 |
 | `"` | `101000` | 40 |
 
+### Unused codes
+
+The decoder currently leaves the following bit patterns unused. They are
+reserved for future expansion and should not appear in normal frames.
+
+| Bits | Decimal |
+| ---- | ------- |
+| `101001` | 41 |
+| `101010` | 42 |
+| `101011` | 43 |
+| `101100` | 44 |
+| `101101` | 45 |
+| `101110` | 46 |
+| `101111` | 47 |
+| `110000` | 48 |
+| `110001` | 49 |
+| `110010` | 50 |
+| `110011` | 51 |
+| `110100` | 52 |
+| `110101` | 53 |
+| `110110` | 54 |
+| `110111` | 55 |
+| `111000` | 56 |
+| `111001` | 57 |
+| `111010` | 58 |
+| `111011` | 59 |
+| `111100` | 60 |
+| `111101` | 61 |
+
 Codes `111110` (62) and `111111` (63) are reserved for frame start/end markers
 and are not emitted as characters.
