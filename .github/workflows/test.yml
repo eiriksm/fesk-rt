@@ -49,7 +49,6 @@ jobs:
         run: npm run lint
 
   test-type-check:
-    if: false
     name: Type check
     runs-on: ubuntu-latest
     timeout-minutes: 20
