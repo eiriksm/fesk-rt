@@ -19,13 +19,9 @@ const DETECTOR_CONFIG = FREQS_SETS.map((base, idx) => {
   if (idx === 1) {
     config.detuneFactors = [0.97, 0.985, 1, 1.015, 1.03];
   }
-  if (idx === 3) {
-    config.detuneFactors = [0.985, 0.995, 1, 1.005, 1.015];
-    config.extra = [[11040.0], [11040.0]];
-  }
   return config;
 });
-const ENERGY_FLOOR = 5e-7; // raise a bit if your room is noisy
+const ENERGY_FLOOR = 5e-7;
 // Streaming tone detector parameters
 const ENERGY_ON = 6e-4;
 const ENERGY_OFF = 2e-4;
@@ -37,12 +33,12 @@ const HP_CUTOFF_HZ = 600;
 const SCORE_MIN = 0.2;
 const SCORE_MIN_BANK = FREQS_SETS.map((_, idx) => (idx === 0 ? 0.28 : 0.18));
 const BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
-const BOOST_GAIN_MULTIPLIER = 10; // softer default boost
+const BOOST_GAIN_MULTIPLIER = 10;
 const MIC_BASE_GAIN = 1;
 const SAMPLE_BASE_GAIN = 1;
 const MIC_BOOST_GAIN = BOOST_GAIN_MULTIPLIER;
 const SAMPLE_BOOST_GAIN = BOOST_GAIN_MULTIPLIER;
-const EXTRA_GAIN_MULTIPLIER = BOOST_GAIN_MULTIPLIER * 2; // matches the old boost level (~20×)
+const EXTRA_GAIN_MULTIPLIER = BOOST_GAIN_MULTIPLIER * 2;
 const MIC_EXTRA_GAIN = EXTRA_GAIN_MULTIPLIER;
 const SAMPLE_EXTRA_GAIN = EXTRA_GAIN_MULTIPLIER;
 const PIPELINE_BASE_DEFS = [];
