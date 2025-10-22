@@ -464,7 +464,7 @@ async function convertBlobToWav(blob) {
   } finally {
     try {
       await tmpCtx.close();
-    } catch (_) {}
+    } catch {}
   }
 }
 
@@ -652,7 +652,7 @@ function disconnectNodeFromPipelines(node, type) {
       const target =
         type === "sample" ? state.sampleGainNode : state.micGainNode;
       node.disconnect(target);
-    } catch (_) {}
+    } catch {}
   }
 }
 
@@ -675,18 +675,18 @@ async function cleanup(nextStatus, opts = {}) {
     bufferSrc.onended = null;
     try {
       bufferSrc.stop();
-    } catch (_) {}
+    } catch {}
     disconnectNodeFromPipelines(bufferSrc, "sample");
     try {
       bufferSrc.disconnect();
-    } catch (_) {}
+    } catch {}
     bufferSrc = null;
   }
   if (mediaSrc) {
     disconnectNodeFromPipelines(mediaSrc, "mic");
     try {
       mediaSrc.disconnect();
-    } catch (_) {}
+    } catch {}
     mediaSrc = null;
   }
   if (mediaStream) {
@@ -697,13 +697,13 @@ async function cleanup(nextStatus, opts = {}) {
     state.ready = false;
     try {
       state.micGainNode.disconnect();
-    } catch (_) {}
+    } catch {}
     try {
       state.sampleGainNode.disconnect();
-    } catch (_) {}
+    } catch {}
     try {
       state.workletNode.disconnect();
-    } catch (_) {}
+    } catch {}
     state.workletNode.port.onmessage = null;
   }
   pipelineStates.clear();
@@ -712,7 +712,7 @@ async function cleanup(nextStatus, opts = {}) {
   if (audioCtx) {
     try {
       await audioCtx.close();
-    } catch (_) {}
+    } catch {}
     audioCtx = null;
   }
   srEl.textContent = "—";
@@ -1070,7 +1070,7 @@ async function playSample(entry) {
         disconnectNodeFromPipelines(finished, "sample");
         try {
           finished.disconnect();
-        } catch (_) {}
+        } catch {}
       }
       bufferSrc = null;
       stopBtn.disabled = true;
