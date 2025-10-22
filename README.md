@@ -5,81 +5,76 @@ FESK decoding, real time ⚡
 
 ## Supported character codes
 
-The decoder recognises the following 6-bit symbols. Each code maps to a
-character that can appear in decoded output.
+The decoder recognises the following 6-bit codes. The table lists every
+possible pattern along with the symbol it represents or how it is reserved.
 
-| Symbol | Bits | Decimal |
-| ------ | ---- | ------- |
-| `a` | `000000` | 0 |
-| `b` | `000001` | 1 |
-| `c` | `000010` | 2 |
-| `d` | `000011` | 3 |
-| `e` | `000100` | 4 |
-| `f` | `000101` | 5 |
-| `g` | `000110` | 6 |
-| `h` | `000111` | 7 |
-| `i` | `001000` | 8 |
-| `j` | `001001` | 9 |
-| `k` | `001010` | 10 |
-| `l` | `001011` | 11 |
-| `m` | `001100` | 12 |
-| `n` | `001101` | 13 |
-| `o` | `001110` | 14 |
-| `p` | `001111` | 15 |
-| `q` | `010000` | 16 |
-| `r` | `010001` | 17 |
-| `s` | `010010` | 18 |
-| `t` | `010011` | 19 |
-| `u` | `010100` | 20 |
-| `v` | `010101` | 21 |
-| `w` | `010110` | 22 |
-| `x` | `010111` | 23 |
-| `y` | `011000` | 24 |
-| `z` | `011001` | 25 |
-| `0` | `011010` | 26 |
-| `1` | `011011` | 27 |
-| `2` | `011100` | 28 |
-| `3` | `011101` | 29 |
-| `4` | `011110` | 30 |
-| `5` | `011111` | 31 |
-| `6` | `100000` | 32 |
-| `7` | `100001` | 33 |
-| `8` | `100010` | 34 |
-| `9` | `100011` | 35 |
-| Space (`␠`) | `100100` | 36 |
-| `,` | `100101` | 37 |
-| `:` | `100110` | 38 |
-| `'` | `100111` | 39 |
-| `"` | `101000` | 40 |
+| Bits    | Decimal | Symbol            | Notes                         |
+| ------- | ------- | ----------------- | ----------------------------- |
+| `000000` | 0 | `a` | |
+| `000001` | 1 | `b` | |
+| `000010` | 2 | `c` | |
+| `000011` | 3 | `d` | |
+| `000100` | 4 | `e` | |
+| `000101` | 5 | `f` | |
+| `000110` | 6 | `g` | |
+| `000111` | 7 | `h` | |
+| `001000` | 8 | `i` | |
+| `001001` | 9 | `j` | |
+| `001010` | 10 | `k` | |
+| `001011` | 11 | `l` | |
+| `001100` | 12 | `m` | |
+| `001101` | 13 | `n` | |
+| `001110` | 14 | `o` | |
+| `001111` | 15 | `p` | |
+| `010000` | 16 | `q` | |
+| `010001` | 17 | `r` | |
+| `010010` | 18 | `s` | |
+| `010011` | 19 | `t` | |
+| `010100` | 20 | `u` | |
+| `010101` | 21 | `v` | |
+| `010110` | 22 | `w` | |
+| `010111` | 23 | `x` | |
+| `011000` | 24 | `y` | |
+| `011001` | 25 | `z` | |
+| `011010` | 26 | `0` | |
+| `011011` | 27 | `1` | |
+| `011100` | 28 | `2` | |
+| `011101` | 29 | `3` | |
+| `011110` | 30 | `4` | |
+| `011111` | 31 | `5` | |
+| `100000` | 32 | `6` | |
+| `100001` | 33 | `7` | |
+| `100010` | 34 | `8` | |
+| `100011` | 35 | `9` | |
+| `100100` | 36 | Space (`␠`) | |
+| `100101` | 37 | `,` | |
+| `100110` | 38 | `:` | |
+| `100111` | 39 | `'` | |
+| `101000` | 40 | `"` | |
+| `101001` | 41 | — | Reserved for future expansion |
+| `101010` | 42 | — | Reserved for future expansion |
+| `101011` | 43 | — | Reserved for future expansion |
+| `101100` | 44 | — | Reserved for future expansion |
+| `101101` | 45 | — | Reserved for future expansion |
+| `101110` | 46 | — | Reserved for future expansion |
+| `101111` | 47 | — | Reserved for future expansion |
+| `110000` | 48 | — | Reserved for future expansion |
+| `110001` | 49 | — | Reserved for future expansion |
+| `110010` | 50 | — | Reserved for future expansion |
+| `110011` | 51 | — | Reserved for future expansion |
+| `110100` | 52 | — | Reserved for future expansion |
+| `110101` | 53 | — | Reserved for future expansion |
+| `110110` | 54 | — | Reserved for future expansion |
+| `110111` | 55 | — | Reserved for future expansion |
+| `111000` | 56 | — | Reserved for future expansion |
+| `111001` | 57 | — | Reserved for future expansion |
+| `111010` | 58 | — | Reserved for future expansion |
+| `111011` | 59 | — | Reserved for future expansion |
+| `111100` | 60 | — | Reserved for future expansion |
+| `111101` | 61 | — | Reserved for future expansion |
+| `111110` | 62 | — | Frame start marker |
+| `111111` | 63 | — | Frame end marker |
 
-### Unused codes
-
-The decoder currently leaves the following bit patterns unused. They are
-reserved for future expansion and should not appear in normal frames.
-
-| Bits | Decimal |
-| ---- | ------- |
-| `101001` | 41 |
-| `101010` | 42 |
-| `101011` | 43 |
-| `101100` | 44 |
-| `101101` | 45 |
-| `101110` | 46 |
-| `101111` | 47 |
-| `110000` | 48 |
-| `110001` | 49 |
-| `110010` | 50 |
-| `110011` | 51 |
-| `110100` | 52 |
-| `110101` | 53 |
-| `110110` | 54 |
-| `110111` | 55 |
-| `111000` | 56 |
-| `111001` | 57 |
-| `111010` | 58 |
-| `111011` | 59 |
-| `111100` | 60 |
-| `111101` | 61 |
-
-Codes `111110` (62) and `111111` (63) are reserved for frame start/end markers
-and are not emitted as characters.
+Codes 41 through 61 are reserved for future expansion and should not appear in
+normal frames. Codes 62 and 63 mark frame boundaries and are not emitted as
+characters.
