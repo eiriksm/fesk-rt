@@ -78,3 +78,7 @@ possible pattern along with the symbol it represents or how it is reserved.
 Codes 41 through 61 are reserved for future expansion and should not appear in
 normal frames. Codes 62 and 63 mark frame boundaries and are not emitted as
 characters.
+
+## Why "FESK"?
+FESK is a word play on FSK [(Frequency-shift keying](https://en.wikipedia.org/wiki/Frequency-shift_keying)). The FESK protocol itself is a binary FSK (BFSK). But the word “fesk” means “fish” in northern Norwegian dialect. Coincidentally, in Norway, I would say one can also use the word as a mild swear word. Something like “what the fish” or “oh… fish!”
+
