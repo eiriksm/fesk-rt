@@ -2,6 +2,7 @@
   "name": "fesk-rt",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "type-check": "tsc --noEmit",
     "dev": "vite",
@@ -9,16 +10,24 @@
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
     "start": "vite preview --host 0.0.0.0 --port 4173",
-    "prettier-check": "prettier --check \"src/**/*.{ts,tsx}\" cypress/**/*.js"
+    "prettier-check": "prettier --check \"src/**/*.{ts,tsx}\" cypress/**/*.js",
+    "lint": "eslint . --max-warnings=0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.38.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.0.4",
     "cypress": "^15.5.0",
     "eslint": "^9.38.0",
+    "eslint-plugin-cypress": "^5.2.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.4.0",
     "prettier": "^3.6.2",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.46.2",
     "vite": "^7.1.11"
   },
   "dependencies": {
