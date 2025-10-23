@@ -46,7 +46,7 @@ possible pattern along with the symbol it represents or how it is reserved.
 | `100001` | 33 | `7` | |
 | `100010` | 34 | `8` | |
 | `100011` | 35 | `9` | |
-| `100100` | 36 | Space (`␠`) | |
+| `100100` | 36 | Space (` `) | |
 | `100101` | 37 | `,` | |
 | `100110` | 38 | `:` | |
 | `100111` | 39 | `'` | |
