@@ -8,6 +8,9 @@ FESK decoding, real time ⚡
 The decoder recognises the following 6-bit codes. The table lists every
 possible pattern along with the symbol it represents or how it is reserved.
 
+<details>
+  <summary>Click to expand full table</summary>
+
 | Bits    | Decimal | Symbol            | Notes                         |
 | ------- | ------- | ----------------- | ----------------------------- |
 | `000000` | 0 | `a` | |
@@ -74,6 +77,8 @@ possible pattern along with the symbol it represents or how it is reserved.
 | `111101` | 61 | — | Reserved for future expansion |
 | `111110` | 62 | — | Frame start marker |
 | `111111` | 63 | — | Frame end marker |
+
+</details>
 
 Codes 41 through 61 are reserved for future expansion and should not appear in
 normal frames. Codes 62 and 63 mark frame boundaries and are not emitted as
