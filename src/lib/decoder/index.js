@@ -856,3 +856,11 @@ export function createFeskDecoder(overrides = {}) {
 }
 
 export const DEFAULT_FESK_DECODER_CONFIG = resolveConfig();
+
+export const __testUtils = {
+  bitsToCodes,
+  decodeCodes,
+  crc8ATM,
+  buildPipelineDefs,
+  buildPipelineThresholds,
+};
