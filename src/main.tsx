@@ -442,19 +442,19 @@ function handleDecoderFrame(payload) {
   const label = def ? def.label : payload.label || payload.pipelineKey;
   const { result } = payload;
   if (!result) return;
-  if (result.ok && result.okCRC && result.text) {
-    const avgScore = Number.isFinite(result.avgScore)
-      ? result.avgScore.toFixed(3)
+  if (result.ok && result.crcOk && result.text) {
+    const avgScore = Number.isFinite(result.confidence)
+      ? result.confidence.toFixed(3)
       : "n/a";
     console.info(
-      `[${label}] frame OK: "${result.text}" (avg score ${avgScore})`,
+      `[${label}] frame OK: "${result.text}" (avg confidence ${avgScore})`,
     );
     const shouldAutoStop = !autoStopTriggered && !stopBtn.disabled;
     if (shouldAutoStop) {
       setStatus(`frame OK (${label}) — stopping…`);
       triggerAutoStop(label);
     }
-  } else if (!result.okCRC) {
+  } else if (!result.crcOk) {
     console.warn(`[${label}] frame CRC fail`);
   } else if (!result.ok) {
     console.warn(`[${label}] frame decode fail`);
