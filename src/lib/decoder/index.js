@@ -278,11 +278,17 @@ export function createFeskDecoder(overrides = {}) {
       state: "hunt",
       frameBits: [],
       bitScores: [],
+      frameScoreSum: 0,
+      frameScoreCount: 0,
+      avgConfidence: 0,
+      lastUpdatedAt: null,
       markerBits: [],
       markerScores: [],
       recentBits: 0,
       recentCount: 0,
       previewText: "",
+      previewConfidence: 0,
+      previewUpdatedAt: null,
       previewConsumedBits: 0,
       previewActive: false,
       pipelineKey,
@@ -298,34 +304,73 @@ export function createFeskDecoder(overrides = {}) {
     if (dec.previewActive) return;
     dec.previewActive = true;
     dec.previewText = "";
+    dec.previewConfidence = 0;
+    dec.previewUpdatedAt = null;
     dec.previewConsumedBits = 0;
     emitPreview(dec.pipelineKey, { text: "", provisional: true });
   }
 
   function updatePreview(dec) {
-    if (!dec.frameBits.length) return;
+    if (!dec.frameBits.length) return null;
     const usableBits = dec.frameBits.length - (dec.frameBits.length % CODE_BITS);
-    if (!usableBits || usableBits <= dec.previewConsumedBits) return;
+    if (!usableBits || usableBits <= dec.previewConsumedBits) return null;
     const codes = bitsToCodes(dec.frameBits, usableBits);
     const res = decodeCodes(codes);
-    if (!res.ok) return;
-    ensurePreview(dec);
+    if (!res.ok) return null;
     const text = res.text;
-    const newText = text.slice(dec.previewText.length);
-    if (newText) {
-      dec.previewText += newText;
-      emitPreview(dec.pipelineKey, { text: dec.previewText, provisional: true });
+    const candidate = {
+      text,
+      confidence: dec.avgConfidence,
+      crcOk: null,
+      updatedAt: dec.lastUpdatedAt,
+      consumedBits: usableBits,
+    };
+    return candidate;
+  }
+
+  function publishPreviewCandidate(dec, candidate) {
+    if (!candidate || typeof candidate.text !== "string") return;
+    ensurePreview(dec);
+    const changedText = candidate.text !== dec.previewText;
+    const changedConfidence = candidate.confidence !== dec.previewConfidence;
+    const changedTimestamp = candidate.updatedAt !== dec.previewUpdatedAt;
+    dec.previewText = candidate.text;
+    dec.previewConfidence = candidate.confidence;
+    dec.previewUpdatedAt = candidate.updatedAt ?? null;
+    if (changedText || changedConfidence || changedTimestamp) {
+      emitPreview(dec.pipelineKey, {
+        text: dec.previewText,
+        provisional: true,
+        confidence: dec.previewConfidence,
+        crcOk: candidate.crcOk,
+        updatedAt: dec.previewUpdatedAt,
+      });
     }
-    dec.previewConsumedBits = usableBits;
+    if (Number.isFinite(candidate.consumedBits)) {
+      dec.previewConsumedBits = candidate.consumedBits;
+    }
+  }
+
+  function recordFrameBit(dec, score) {
+    const s = Number.isFinite(score) ? score : 0;
+    dec.frameScoreSum += s;
+    dec.frameScoreCount += 1;
+    dec.avgConfidence = dec.frameScoreCount
+      ? dec.frameScoreSum / dec.frameScoreCount
+      : 0;
+    dec.lastUpdatedAt = Date.now();
   }
 
   function commitPreview(dec, result) {
-    const shouldKeep = result.ok && result.okCRC && result.text;
+    const shouldKeep = Boolean(result?.text) && result?.crcOk === true;
     if (dec.previewActive) {
       if (shouldKeep) {
         emitPreview(dec.pipelineKey, {
           text: result.text,
           provisional: false,
+          confidence: result.confidence,
+          crcOk: result.crcOk,
+          updatedAt: result.updatedAt,
         });
       } else {
         emitPreview(dec.pipelineKey, { text: null, provisional: false });
@@ -334,6 +379,9 @@ export function createFeskDecoder(overrides = {}) {
       emitPreview(dec.pipelineKey, {
         text: result.text,
         provisional: false,
+        confidence: result.confidence,
+        crcOk: result.crcOk,
+        updatedAt: result.updatedAt,
       });
     }
     dec.previewActive = false;
@@ -345,11 +393,17 @@ export function createFeskDecoder(overrides = {}) {
     dec.state = "hunt";
     dec.frameBits.length = 0;
     dec.bitScores.length = 0;
+    dec.frameScoreSum = 0;
+    dec.frameScoreCount = 0;
+    dec.avgConfidence = 0;
+    dec.lastUpdatedAt = null;
     dec.markerBits.length = 0;
     dec.markerScores.length = 0;
     dec.recentBits = 0;
     dec.recentCount = 0;
     dec.previewText = "";
+    dec.previewConfidence = 0;
+    dec.previewUpdatedAt = null;
     dec.previewConsumedBits = 0;
     if (dec.previewActive) {
       emitPreview(dec.pipelineKey, { text: null, provisional: false });
@@ -363,13 +417,15 @@ export function createFeskDecoder(overrides = {}) {
 
   function finalizeFrame(dec) {
     const totalBits = dec.frameBits.length;
+    const baseConfidence = dec.avgConfidence;
     if (totalBits < CRC_BITS) {
       const r = {
         ok: false,
-        okCRC: false,
+        crcOk: false,
         text: null,
-        avgScore: 0,
-        why: "short",
+        confidence: baseConfidence,
+        status: "short",
+        updatedAt: dec.lastUpdatedAt,
       };
       commitPreview(dec, r);
       return r;
@@ -378,10 +434,11 @@ export function createFeskDecoder(overrides = {}) {
     if (payloadBitLength < 0 || payloadBitLength % CODE_BITS !== 0) {
       const r = {
         ok: false,
-        okCRC: false,
+        crcOk: false,
         text: null,
-        avgScore: 0,
-        why: "misaligned",
+        confidence: baseConfidence,
+        status: "misaligned",
+        updatedAt: dec.lastUpdatedAt,
       };
       commitPreview(dec, r);
       return r;
@@ -402,14 +459,21 @@ export function createFeskDecoder(overrides = {}) {
     }
 
     const payloadScores = dec.bitScores.slice(0, payloadBitLength);
-    const avgScore = payloadScores.length
+    const confidence = payloadScores.length
       ? payloadScores.reduce((a, b) => a + b, 0) / payloadScores.length
-      : 0;
+      : baseConfidence;
 
     dec.markerBits.length = 0;
     dec.markerScores.length = 0;
 
-    const result = { ok, okCRC, text, avgScore };
+    const result = {
+      ok,
+      crcOk: okCRC,
+      text,
+      confidence,
+      status: okCRC ? (ok ? "ok" : "decode-fail") : "crc-fail",
+      updatedAt: dec.lastUpdatedAt,
+    };
     commitPreview(dec, result);
     return result;
   }
@@ -426,7 +490,13 @@ export function createFeskDecoder(overrides = {}) {
         dec.state = "payload";
         dec.frameBits.length = 0;
         dec.bitScores.length = 0;
+        dec.frameScoreSum = 0;
+        dec.frameScoreCount = 0;
+        dec.avgConfidence = 0;
+        dec.lastUpdatedAt = null;
         dec.previewText = "";
+        dec.previewConfidence = 0;
+        dec.previewUpdatedAt = null;
         dec.previewConsumedBits = 0;
         dec.previewActive = false;
         dec.recentBits = 0;
@@ -454,7 +524,9 @@ export function createFeskDecoder(overrides = {}) {
       const flushedScore = dec.markerScores.shift();
       dec.frameBits.push(flushed);
       dec.bitScores.push(flushedScore);
-      updatePreview(dec);
+      recordFrameBit(dec, flushedScore);
+      const candidate = updatePreview(dec);
+      if (candidate) publishPreviewCandidate(dec, candidate);
       flushedAny = true;
     }
 
@@ -466,7 +538,9 @@ export function createFeskDecoder(overrides = {}) {
         const flushedScore = dec.markerScores.shift();
         dec.frameBits.push(flushed);
         dec.bitScores.push(flushedScore);
-        updatePreview(dec);
+        recordFrameBit(dec, flushedScore);
+        const candidate = updatePreview(dec);
+        if (candidate) publishPreviewCandidate(dec, candidate);
         continue;
       }
       const result = finalizeFrame(dec);
@@ -477,7 +551,10 @@ export function createFeskDecoder(overrides = {}) {
     dec.recentBits = ((dec.recentBits << 1) | bit) & START_END_MASK;
     dec.recentCount = Math.min(dec.recentCount + 1, CODE_BITS);
 
-    if (!dec.markerBits.length && !flushedAny) updatePreview(dec);
+    if (!dec.markerBits.length && !flushedAny) {
+      const candidate = updatePreview(dec);
+      if (candidate) publishPreviewCandidate(dec, candidate);
+    }
     return null;
   }
 
@@ -578,7 +655,7 @@ export function createFeskDecoder(overrides = {}) {
         result: out,
       });
 
-      if (out.ok && out.okCRC && out.text) {
+      if (out.ok && out.crcOk && out.text) {
         emitState({
           kind: "pipeline-status",
           pipelineKey: def.key,
@@ -589,7 +666,7 @@ export function createFeskDecoder(overrides = {}) {
         }
         hadFrameOk = true;
         pendingStatus = null;
-      } else if (!out.okCRC) {
+      } else if (!out.crcOk) {
         emitState({
           kind: "pipeline-status",
           pipelineKey: def.key,
