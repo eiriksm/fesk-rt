@@ -1,7 +1,4 @@
 // @ts-nocheck
-import { createRoot } from "react-dom/client";
-
-import { DebugMetrics } from "./components/DebugMetrics";
 import { createFeskDecoder } from "./lib/decoder";
 
 const SAMPLE_WAV_CONFIG = [
@@ -24,71 +21,20 @@ const PIPELINE_BY_KEY = new Map(PIPELINE_DEFS.map((def) => [def.key, def]));
 
 // =================== UI helpers ===================
 const statusEl = document.getElementById("status");
-const outEl = document.getElementById("out");
 const srEl = document.getElementById("sr");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const downloadBtn = document.getElementById("downloadBtn");
+const decodedLineEl = document.getElementById("decodedLine");
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
-const freqEls = new Map();
-const pipelineStatusEls = new Map();
-const pipelineOutputEls = new Map();
-const pipelinePreviewEls = new Map();
 const sampleButtons = SAMPLE_WAV_CONFIG.map(({ id, url, label }) => {
   const button = document.getElementById(id);
   return button ? { button, url, label } : null;
 }).filter(Boolean);
 
-const pipelineDebugMetricsContainer = document.getElementById(
-  "pipelineDebugMetrics",
-);
-
-if (pipelineDebugMetricsContainer) {
-  const definitions = PIPELINE_DEFS.map((def) => ({
-    key: def.key,
-    label: def.label,
-  }));
-  const root = createRoot(pipelineDebugMetricsContainer);
-  root.render(
-    <DebugMetrics
-      definitions={definitions}
-      onReady={hydratePipelineDebugMetricRefs}
-    />,
-  );
-}
-
-function hydratePipelineDebugMetricRefs() {
-  freqEls.clear();
-  pipelineStatusEls.clear();
-
-  let found = false;
-
-  PIPELINE_DEFS.forEach((def) => {
-    const freqEl = document.getElementById(`freq-${def.key}`);
-    if (freqEl) {
-      freqEls.set(def.key, freqEl);
-      found = true;
-    }
-
-    const statusEl = document.getElementById(`status-${def.key}`);
-    if (statusEl) {
-      pipelineStatusEls.set(def.key, statusEl);
-      found = true;
-    }
-  });
-
-  if (found) {
-    resetFreqDisplays();
-    resetPipelineStatuses();
-  }
-}
-
 function setSampleButtonsDisabled(disabled) {
   for (const entry of sampleButtons) entry.button.disabled = disabled;
 }
-
-hydratePipelineDebugMetricRefs();
-setupOutputContainers();
 
 let recorder = null;
 let recordedChunks = [];
@@ -109,91 +55,16 @@ if (typeof MediaRecorder === "undefined") {
 function setStatus(s) {
   statusEl.textContent = s;
 }
-function setupOutputContainers() {
-  pipelineOutputEls.clear();
-  pipelinePreviewEls.clear();
-  outEl.textContent = "";
-  PIPELINE_DEFS.forEach((def) => {
-    const wrapper = document.createElement("div");
-    wrapper.className = "out-bank";
-    const title = document.createElement("div");
-    title.className = "out-bank-title";
-    title.textContent = def.label;
-    const body = document.createElement("div");
-    body.className = "out-bank-body";
-    wrapper.append(title, body);
-    outEl.append(wrapper);
-    pipelineOutputEls.set(def.key, body);
-  });
+
+function renderDecodedLine(text = "", className = "") {
+  if (!decodedLineEl) return;
+  decodedLineEl.textContent = text || "";
+  decodedLineEl.className = className
+    ? `decoded-line ${className}`
+    : "decoded-line";
 }
 
-function appendResult(pipelineKey, text) {
-  if (!text) return;
-  const target = pipelineOutputEls.get(pipelineKey);
-  if (!target) return;
-  const span = document.createElement("span");
-  span.className = "decoded-ok";
-  span.textContent = text;
-  target.append(span);
-}
-
-function setPreview(pipelineKey, text, provisional) {
-  const target = pipelineOutputEls.get(pipelineKey);
-  if (!target) return;
-  const existing = pipelinePreviewEls.get(pipelineKey) || null;
-
-  if (text == null) {
-    if (existing) {
-      existing.remove();
-      pipelinePreviewEls.delete(pipelineKey);
-    }
-    return;
-  }
-
-  if (!provisional) {
-    if (existing) {
-      existing.remove();
-      pipelinePreviewEls.delete(pipelineKey);
-    }
-    appendResult(pipelineKey, text);
-    return;
-  }
-
-  let span = existing;
-  if (!span || !target.contains(span)) {
-    if (span) span.remove();
-    span = document.createElement("span");
-    span.className = "provisional";
-    pipelinePreviewEls.set(pipelineKey, span);
-    target.append(span);
-  }
-  span.textContent = text;
-  span.className = "provisional";
-}
-
-function clearPreviews() {
-  for (const span of pipelinePreviewEls.values()) {
-    if (span) span.remove();
-  }
-  pipelinePreviewEls.clear();
-}
-function formatFreq(f) {
-  const txt = f.toFixed(1);
-  return (txt.endsWith(".0") ? txt.slice(0, -2) : txt) + " Hz";
-}
-function resetFreqDisplays() {
-  for (const el of freqEls.values()) el.textContent = "—";
-}
-function resetPipelineStatuses() {
-  for (const el of pipelineStatusEls.values()) el.textContent = "—";
-}
-function setPipelineStatus(pipelineKey, text) {
-  const el = pipelineStatusEls.get(pipelineKey);
-  if (el) el.textContent = text;
-}
-
-resetFreqDisplays();
-resetPipelineStatuses();
+renderDecodedLine();
 
 function getRecorderMimeType() {
   if (typeof MediaRecorder === "undefined") return null;
@@ -393,23 +264,6 @@ function handleDecoderState(payload) {
     case "status":
       if (typeof payload.status === "string") setStatus(payload.status);
       break;
-    case "pipeline-status":
-      if (payload.pipelineKey)
-        setPipelineStatus(payload.pipelineKey, payload.status ?? "—");
-      break;
-    case "freq": {
-      const freqEl = payload.pipelineKey
-        ? freqEls.get(payload.pipelineKey)
-        : null;
-      if (freqEl) {
-        if (Number.isFinite(payload.freqHz) && payload.freqHz > 0) {
-          freqEl.textContent = formatFreq(Number(payload.freqHz));
-        } else {
-          freqEl.textContent = "—";
-        }
-      }
-      break;
-    }
     case "sample-rate":
       if (Number.isFinite(payload.sampleRate) && payload.sampleRate > 0) {
         srEl.textContent = `${payload.sampleRate.toFixed(0)} Hz`;
@@ -426,13 +280,14 @@ function handleDecoderState(payload) {
 }
 
 function handleDecoderPreview(payload) {
-  if (!payload || !payload.pipelineKey) return;
+  if (!payload) return;
   if (payload.text === null) {
-    setPreview(payload.pipelineKey, null, false);
+    renderDecodedLine();
     return;
   }
   if (typeof payload.text === "string") {
-    setPreview(payload.pipelineKey, payload.text, Boolean(payload.provisional));
+    const className = payload.provisional ? "provisional" : "";
+    renderDecodedLine(payload.text, className);
   }
 }
 
@@ -443,6 +298,7 @@ function handleDecoderFrame(payload) {
   const { result } = payload;
   if (!result) return;
   if (result.ok && result.crcOk && result.text) {
+    renderDecodedLine(result.text, "decoded-ok");
     const avgScore = Number.isFinite(result.confidence)
       ? result.confidence.toFixed(3)
       : "n/a";
@@ -494,9 +350,8 @@ async function cleanup(nextStatus, opts = {}) {
     mediaStream = null;
   }
   await decoder.stop({ status: nextStatus });
-  clearPreviews();
-  resetFreqDisplays();
-  resetPipelineStatuses();
+  renderDecodedLine();
+  if (srEl) srEl.textContent = "—";
   autoStopTriggered = false;
 }
 
@@ -518,7 +373,6 @@ startBtn.addEventListener("click", async () => {
   setSampleButtonsDisabled(true);
   try {
     await cleanup(null);
-    setupOutputContainers();
     await decoder.prepare();
     await decoder.waitForReady();
     setStatus("requesting microphone…");
@@ -573,7 +427,6 @@ async function playSample(entry) {
   stopBtn.disabled = true;
   try {
     await cleanup(null);
-    setupOutputContainers();
     await decoder.prepare({ suppressReadyStatus: true });
     await decoder.waitForReady();
     const labelSuffix = label ? ` ${label}` : "";

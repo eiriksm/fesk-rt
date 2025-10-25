@@ -57,87 +57,57 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
+    align-items: stretch;
   }
   .controls button {
-    flex: 1 1 220px;
+    flex: 1 1 160px;
     min-width: 140px;
   }
   .controls button:disabled {
     display: none;
   }
-  details.debug-panel {
-    margin-top: 1.5rem;
-  }
-  details.debug-panel summary {
-    cursor: pointer;
-    font-weight: 600;
-  }
-  .debug-panel-content {
-    margin-top: 0.75rem;
-    display: grid;
-    gap: 1.25rem;
-  }
-  .debug-controls {
+  .sample-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
-  .debug-controls button {
+  .sample-buttons button {
     flex: 1 1 220px;
     min-width: 140px;
   }
-  .debug-metrics {
-    display: grid;
-    gap: 0.5rem;
-  }
-  .debug-metric {
-    display: flex;
-    gap: 0.35rem;
-    align-items: baseline;
-    font-size: 0.95rem;
-  }
-  #out {
+  .decoded-line {
+    flex: 2 1 240px;
+    min-height: 3.25rem;
     border: 1px solid #ddd;
     border-radius: 0;
-    padding: 12px;
-    min-height: 6rem;
     background: #fafafa;
-    display: grid;
-    gap: 12px;
-  }
-  #out .provisional {
-    opacity: 0.65;
-    border-bottom: 1px dotted rgba(0, 0, 0, 0.4);
-  }
-  .out-bank {
-    border: 1px solid #eee;
-    border-radius: 0;
-    padding: 10px 12px;
-    background: #fff;
-  }
-  .out-bank-title {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: #333;
-    margin-bottom: 0.4rem;
-  }
-  .out-bank-body {
-    white-space: pre-wrap;
+    padding: 0.75rem 1rem;
     font:
-      14px/1.5 ui-monospace,
+      15px/1.5 ui-monospace,
       SFMono-Regular,
       Menlo,
       monospace;
-    overflow-x: auto;
+    display: flex;
+    align-items: center;
   }
-  .decoded-ok {
+  .decoded-line.provisional {
+    opacity: 0.65;
+    border-bottom: 1px dotted rgba(0, 0, 0, 0.4);
+  }
+  .decoded-line.decoded-ok {
     color: #0f7a3c;
     font-weight: 600;
   }
-  @media (max-width: 480px) {
-    .debug-metric strong {
-      white-space: nowrap;
-    }
+  .status-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: 0.95rem;
+  }
+  .status-row div {
+    display: flex;
+    gap: 0.35rem;
+    align-items: baseline;
   }
 </style>
 
@@ -147,33 +117,22 @@
     <button id="startBtn">Start 🎙️</button>
     <button id="stopBtn" disabled>Stop 🚫</button>
     <button id="downloadBtn" disabled>Download WAV ⬇️</button>
+    <div id="decodedLine" class="decoded-line" aria-live="polite"></div>
   </div>
-  <details class="debug-panel">
-    <summary>Debug</summary>
-    <div class="debug-panel-content">
-      <div class="debug-controls">
-        <button id="sample1Btn">Play Sample 1 🔊</button>
-        <button id="sample2Btn">Play Sample 2 🔊</button>
-        <button id="sample3Btn">Play Sample 3 🔊</button>
-        <button id="sample4Btn">Play Sample 4 🔊</button>
-        <button id="sample5Btn">Play Sample 5 🔊</button>
-        <button id="sample6Btn">Play Sample 6 🔊</button>
-        <button id="sample7Btn">Play Sample 7 🔊</button>
-        <button id="sample8Btn">Play Sample 8 🔊</button>
-      </div>
-      <div class="debug-metrics" id="debugMetrics">
-        <div class="debug-metric">
-          <strong>Overall status:</strong> <span id="status">idle</span>
-        </div>
-        <div class="debug-metric">
-          <strong>SR:</strong> <span id="sr">—</span>
-        </div>
-        <div id="pipelineDebugMetrics"></div>
-      </div>
-    </div>
-  </details>
-  <div class="row"><strong>Decoded output:</strong></div>
-  <div id="out"></div>
+  <div class="row status-row">
+    <div><strong>Status:</strong> <span id="status">idle</span></div>
+    <div><strong>Sample rate:</strong> <span id="sr">—</span></div>
+  </div>
+  <div class="row sample-buttons">
+    <button id="sample1Btn">Play Sample 1 🔊</button>
+    <button id="sample2Btn">Play Sample 2 🔊</button>
+    <button id="sample3Btn">Play Sample 3 🔊</button>
+    <button id="sample4Btn">Play Sample 4 🔊</button>
+    <button id="sample5Btn">Play Sample 5 🔊</button>
+    <button id="sample6Btn">Play Sample 6 🔊</button>
+    <button id="sample7Btn">Play Sample 7 🔊</button>
+    <button id="sample8Btn">Play Sample 8 🔊</button>
+  </div>
 </div>
 
 <script type="module" src="/src/main.tsx"></script>
