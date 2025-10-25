@@ -56,15 +56,18 @@ function setStatus(s) {
   statusEl.textContent = s;
 }
 
-function renderDecodedLine(text = "", className = "") {
+function renderDecodedLine(text, className) {
   if (!decodedLineEl) return;
-  decodedLineEl.textContent = text || "";
-  decodedLineEl.className = className
-    ? `decoded-line ${className}`
-    : "decoded-line";
+  const baseClass = "decoded-line";
+  decodedLineEl.textContent = text != null ? text : "";
+  if (className) {
+    decodedLineEl.className = `${baseClass} ${className}`;
+  } else {
+    decodedLineEl.className = baseClass;
+  }
 }
 
-renderDecodedLine();
+renderDecodedLine("");
 
 function getRecorderMimeType() {
   if (typeof MediaRecorder === "undefined") return null;
@@ -282,7 +285,7 @@ function handleDecoderState(payload) {
 function handleDecoderPreview(payload) {
   if (!payload) return;
   if (payload.text === null) {
-    renderDecodedLine();
+    renderDecodedLine("");
     return;
   }
   if (typeof payload.text === "string") {
@@ -350,8 +353,8 @@ async function cleanup(nextStatus, opts = {}) {
     mediaStream = null;
   }
   await decoder.stop({ status: nextStatus });
-  renderDecodedLine();
-  if (srEl) srEl.textContent = "—";
+  renderDecodedLine("");
+  srEl.textContent = "—";
   autoStopTriggered = false;
 }
 

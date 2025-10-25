@@ -66,15 +66,6 @@
   .controls button:disabled {
     display: none;
   }
-  .sample-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-  .sample-buttons button {
-    flex: 1 1 220px;
-    min-width: 140px;
-  }
   .decoded-line {
     flex: 2 1 240px;
     min-height: 3.25rem;
@@ -98,16 +89,23 @@
     color: #0f7a3c;
     font-weight: 600;
   }
-  .status-row {
+  .status-line {
     display: flex;
     flex-wrap: wrap;
-    gap: 1.25rem;
+    gap: 1rem;
     font-size: 0.95rem;
   }
-  .status-row div {
+  .status-line strong {
+    margin-right: 0.35rem;
+  }
+  .sample-buttons {
     display: flex;
-    gap: 0.35rem;
-    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .sample-buttons button {
+    flex: 1 1 220px;
+    min-width: 140px;
   }
 </style>
 
@@ -119,7 +117,7 @@
     <button id="downloadBtn" disabled>Download WAV ⬇️</button>
     <div id="decodedLine" class="decoded-line" aria-live="polite"></div>
   </div>
-  <div class="row status-row">
+  <div class="row status-line">
     <div><strong>Status:</strong> <span id="status">idle</span></div>
     <div><strong>Sample rate:</strong> <span id="sr">—</span></div>
   </div>
