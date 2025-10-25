@@ -11,7 +11,8 @@
     "cypress:run": "cypress run",
     "start": "vite preview --host 0.0.0.0 --port 4173",
     "prettier-check": "prettier --check \"src/**/*.{ts,tsx}\" cypress/**/*.js",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "unit": "vitest run"
   },
   "devDependencies": {
     "@eslint/js": "^9.38.0",
@@ -28,7 +29,8 @@
     "prettier": "^3.6.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.46.2",
-    "vite": "^7.1.11"
+    "vite": "^7.1.11",
+    "vitest": "^2.1.8"
   },
   "dependencies": {
     "react": "^19.2.0",

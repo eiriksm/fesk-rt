@@ -1,0 +1,866 @@
+const CODE_BITS = 6;
+const CRC_BITS = 8;
+const START_CODE = 62;
+const END_CODE = 63;
+const START_END_MASK = (1 << CODE_BITS) - 1;
+const END_MARK_BITS = Array.from(
+  { length: CODE_BITS },
+  (_, i) => (END_CODE >> (CODE_BITS - 1 - i)) & 1,
+);
+
+const DEFAULT_FREQS_SETS = [
+  [2560.0, 3072.0],
+  [7394.0, 9313.0],
+];
+
+const DEFAULT_BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
+
+const DEFAULT_ENERGY = {
+  floor: 5e-7,
+  on: 6e-4,
+  off: 2e-4,
+  minToneMs: 40,
+  minGapMs: 5,
+  ignoreHeadMs: 6,
+  envelopeMs: 6,
+  hpCutoffHz: 600,
+};
+
+const DEFAULT_GAIN_CONFIG = {
+  micBase: 1,
+  sampleBase: 1,
+  boostMultiplier: 10,
+  extraMultiplier: 20,
+};
+
+const DEFAULT_SCORE_MIN = 0.2;
+const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((_, idx) =>
+  idx === 0 ? 0.28 : 0.18,
+);
+
+const DEFAULT_WORKLET_URL = "/mb-fesk-worklet.js";
+
+function createEmitter() {
+  const handlers = new Map();
+  return {
+    on(event, handler) {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event).add(handler);
+      return () => this.off(event, handler);
+    },
+    off(event, handler) {
+      const set = handlers.get(event);
+      if (!set) return;
+      set.delete(handler);
+      if (!set.size) handlers.delete(event);
+    },
+    once(event, handler) {
+      const off = this.on(event, (...args) => {
+        off();
+        handler(...args);
+      });
+      return off;
+    },
+    emit(event, payload) {
+      const set = handlers.get(event);
+      if (!set) return;
+      for (const handler of Array.from(set)) handler(payload);
+    },
+  };
+}
+
+function bankLabel(idx, overrides = DEFAULT_BANK_LABEL_OVERRIDES) {
+  if (overrides.has(idx)) return overrides.get(idx);
+  if (idx >= 0 && idx < 26) return String.fromCharCode(65 + idx);
+  return String(idx + 1);
+}
+
+function buildDetectorConfig(freqSets) {
+  return freqSets.map((base, idx) => {
+    const config = {
+      base,
+      harmonicMultipliers: [1, 2, 3, 4],
+      detuneFactors: [0.99, 1, 1.01],
+    };
+    if (idx === 1) {
+      config.detuneFactors = [0.97, 0.985, 1, 1.015, 1.03];
+    }
+    return config;
+  });
+}
+
+function buildPipelineDefs(freqSets, options = {}) {
+  const {
+    bankLabelOverrides = DEFAULT_BANK_LABEL_OVERRIDES,
+    micBase = DEFAULT_GAIN_CONFIG.micBase,
+    sampleBase = DEFAULT_GAIN_CONFIG.sampleBase,
+    boostMultiplier = DEFAULT_GAIN_CONFIG.boostMultiplier,
+    extraMultiplier = DEFAULT_GAIN_CONFIG.extraMultiplier,
+  } = options;
+
+  const defs = [];
+  freqSets.forEach((_, idx) => {
+    const baseLabel = bankLabel(idx, bankLabelOverrides);
+    defs.push(
+      {
+        key: `bank-${idx}`,
+        baseBankIndex: idx,
+        label: `Bank ${baseLabel}`,
+        shortLabel: `${baseLabel}`,
+        micGain: micBase,
+        sampleGain: sampleBase,
+      },
+      {
+        key: `bank-${idx}-boost`,
+        baseBankIndex: idx,
+        label: `Bank ${baseLabel} boost`,
+        shortLabel: `${baseLabel}+`,
+        micGain: micBase * boostMultiplier,
+        sampleGain: sampleBase * boostMultiplier,
+      },
+      {
+        key: `bank-${idx}-extra`,
+        baseBankIndex: idx,
+        label: `Bank ${baseLabel} extra boost`,
+        shortLabel: `${baseLabel}++`,
+        micGain: micBase * extraMultiplier,
+        sampleGain: sampleBase * extraMultiplier,
+      },
+    );
+  });
+  return defs;
+}
+
+function buildPipelineThresholds(defs, scoreMinBank, scoreMin) {
+  const thresholds = new Map();
+  defs.forEach((def) => {
+    const bankIdx = def.baseBankIndex;
+    const value = scoreMinBank?.[bankIdx];
+    thresholds.set(def.key, Number.isFinite(value) ? value : scoreMin);
+  });
+  return thresholds;
+}
+
+function bitsToCodes(bits, length = bits.length) {
+  const codes = [];
+  for (let offset = 0; offset + CODE_BITS <= length; offset += CODE_BITS) {
+    let value = 0;
+    for (let i = 0; i < CODE_BITS; i += 1) {
+      value = (value << 1) | bits[offset + i];
+    }
+    codes.push(value);
+  }
+  return codes;
+}
+
+function decodeCodes(codes) {
+  const CODE_MAP = new Array(64).fill(null);
+  [
+    [0, "a"],
+    [1, "b"],
+    [2, "c"],
+    [3, "d"],
+    [4, "e"],
+    [5, "f"],
+    [6, "g"],
+    [7, "h"],
+    [8, "i"],
+    [9, "j"],
+    [10, "k"],
+    [11, "l"],
+    [12, "m"],
+    [13, "n"],
+    [14, "o"],
+    [15, "p"],
+    [16, "q"],
+    [17, "r"],
+    [18, "s"],
+    [19, "t"],
+    [20, "u"],
+    [21, "v"],
+    [22, "w"],
+    [23, "x"],
+    [24, "y"],
+    [25, "z"],
+    [26, "0"],
+    [27, "1"],
+    [28, "2"],
+    [29, "3"],
+    [30, "4"],
+    [31, "5"],
+    [32, "6"],
+    [33, "7"],
+    [34, "8"],
+    [35, "9"],
+    [36, " "],
+    [37, ","],
+    [38, ":"],
+    [39, "'"],
+    [40, '"'],
+  ].forEach(([code, ch]) => {
+    CODE_MAP[code] = ch;
+  });
+
+  const chars = [];
+  for (let i = 0; i < codes.length; i += 1) {
+    const code = codes[i];
+    const ch = CODE_MAP[code];
+    if (typeof ch !== "string") {
+      return {
+        ok: false,
+        text: null,
+        err: `unsupported code ${code} at index ${i}`,
+      };
+    }
+    chars.push(ch);
+  }
+  return { ok: true, text: chars.join("") };
+}
+
+function crc8ATM(codes) {
+  let crc = 0x00;
+  for (const code of codes) {
+    for (let bit = CODE_BITS - 1; bit >= 0; bit -= 1) {
+      const inputBit = (code >> bit) & 1;
+      const mix = ((crc >> 7) & 1) ^ inputBit;
+      crc = (crc << 1) & 0xff;
+      if (mix) crc ^= 0x07;
+    }
+  }
+  return crc;
+}
+
+function bitsToByte(bits) {
+  let value = 0;
+  for (let i = 0; i < bits.length; i += 1) {
+    value = (value << 1) | bits[i];
+  }
+  return value;
+}
+
+function resolveConfig(overrides = {}) {
+  const freqSets = overrides.freqSets ?? DEFAULT_FREQS_SETS;
+  const detectorConfig = overrides.detectorConfig ?? buildDetectorConfig(freqSets);
+  const gainConfig = { ...DEFAULT_GAIN_CONFIG, ...(overrides.gainConfig || {}) };
+  const pipelineDefs =
+    overrides.pipelineDefs ?? buildPipelineDefs(freqSets, { ...overrides.pipelineOptions, ...gainConfig });
+  const scoreMin = overrides.scoreMin ?? DEFAULT_SCORE_MIN;
+  const scoreMinBank = overrides.scoreMinBank ?? DEFAULT_SCORE_MIN_BANK;
+  const pipelineThresholds =
+    overrides.pipelineThresholds ?? buildPipelineThresholds(pipelineDefs, scoreMinBank, scoreMin);
+  return {
+    freqSets,
+    detectorConfig,
+    energy: { ...DEFAULT_ENERGY, ...(overrides.energy || {}) },
+    pipelineDefs,
+    pipelineThresholds,
+    scoreMin,
+    scoreMinBank,
+    workletUrl: overrides.workletUrl ?? DEFAULT_WORKLET_URL,
+  };
+}
+
+export function createFeskDecoder(overrides = {}) {
+  const config = resolveConfig(overrides);
+  const events = createEmitter();
+  const pipelineStates = new Map();
+  const pipelineReadyWaiters = new Set();
+  const toneLog = new Map();
+  let audioCtx = null;
+  let mediaSrc = null;
+  let bufferSrc = null;
+  let suppressReadyStatus = false;
+
+  const decoderStates = new Map();
+
+  function mkDec(pipelineKey, label) {
+    return {
+      state: "hunt",
+      frameBits: [],
+      bitScores: [],
+      markerBits: [],
+      markerScores: [],
+      recentBits: 0,
+      recentCount: 0,
+      previewText: "",
+      previewConsumedBits: 0,
+      previewActive: false,
+      pipelineKey,
+      label,
+    };
+  }
+
+  function emitPreview(pipelineKey, payload) {
+    events.emit("preview", { pipelineKey, ...payload });
+  }
+
+  function ensurePreview(dec) {
+    if (dec.previewActive) return;
+    dec.previewActive = true;
+    dec.previewText = "";
+    dec.previewConsumedBits = 0;
+    emitPreview(dec.pipelineKey, { text: "", provisional: true });
+  }
+
+  function updatePreview(dec) {
+    if (!dec.frameBits.length) return;
+    const usableBits = dec.frameBits.length - (dec.frameBits.length % CODE_BITS);
+    if (!usableBits || usableBits <= dec.previewConsumedBits) return;
+    const codes = bitsToCodes(dec.frameBits, usableBits);
+    const res = decodeCodes(codes);
+    if (!res.ok) return;
+    ensurePreview(dec);
+    const text = res.text;
+    const newText = text.slice(dec.previewText.length);
+    if (newText) {
+      dec.previewText += newText;
+      emitPreview(dec.pipelineKey, { text: dec.previewText, provisional: true });
+    }
+    dec.previewConsumedBits = usableBits;
+  }
+
+  function commitPreview(dec, result) {
+    const shouldKeep = result.ok && result.okCRC && result.text;
+    if (dec.previewActive) {
+      if (shouldKeep) {
+        emitPreview(dec.pipelineKey, {
+          text: result.text,
+          provisional: false,
+        });
+      } else {
+        emitPreview(dec.pipelineKey, { text: null, provisional: false });
+      }
+    } else if (shouldKeep) {
+      emitPreview(dec.pipelineKey, {
+        text: result.text,
+        provisional: false,
+      });
+    }
+    dec.previewActive = false;
+    dec.previewText = "";
+    dec.previewConsumedBits = 0;
+  }
+
+  function resetDec(dec) {
+    dec.state = "hunt";
+    dec.frameBits.length = 0;
+    dec.bitScores.length = 0;
+    dec.markerBits.length = 0;
+    dec.markerScores.length = 0;
+    dec.recentBits = 0;
+    dec.recentCount = 0;
+    dec.previewText = "";
+    dec.previewConsumedBits = 0;
+    if (dec.previewActive) {
+      emitPreview(dec.pipelineKey, { text: null, provisional: false });
+    }
+    dec.previewActive = false;
+  }
+
+  function resetAllDecoders() {
+    for (const dec of decoderStates.values()) resetDec(dec);
+  }
+
+  function finalizeFrame(dec) {
+    const totalBits = dec.frameBits.length;
+    if (totalBits < CRC_BITS) {
+      const r = {
+        ok: false,
+        okCRC: false,
+        text: null,
+        avgScore: 0,
+        why: "short",
+      };
+      commitPreview(dec, r);
+      return r;
+    }
+    const payloadBitLength = totalBits - CRC_BITS;
+    if (payloadBitLength < 0 || payloadBitLength % CODE_BITS !== 0) {
+      const r = {
+        ok: false,
+        okCRC: false,
+        text: null,
+        avgScore: 0,
+        why: "misaligned",
+      };
+      commitPreview(dec, r);
+      return r;
+    }
+    const payloadCodes = bitsToCodes(dec.frameBits, payloadBitLength);
+    const recvCrc = bitsToByte(
+      dec.frameBits.slice(payloadBitLength, payloadBitLength + CRC_BITS),
+    );
+    const wantCrc = crc8ATM(payloadCodes);
+    const okCRC = recvCrc === wantCrc;
+
+    let ok = false;
+    let text = null;
+    if (okCRC) {
+      const res = decodeCodes(payloadCodes);
+      ok = res.ok;
+      text = res.text;
+    }
+
+    const payloadScores = dec.bitScores.slice(0, payloadBitLength);
+    const avgScore = payloadScores.length
+      ? payloadScores.reduce((a, b) => a + b, 0) / payloadScores.length
+      : 0;
+
+    dec.markerBits.length = 0;
+    dec.markerScores.length = 0;
+
+    const result = { ok, okCRC, text, avgScore };
+    commitPreview(dec, result);
+    return result;
+  }
+
+  function feedOne(dec, symIdx, score) {
+    const s = score ?? 0;
+    if (symIdx !== 0 && symIdx !== 1) return null;
+    const bit = symIdx & 1;
+
+    if (dec.state === "hunt") {
+      dec.recentBits = ((dec.recentBits << 1) | bit) & START_END_MASK;
+      dec.recentCount = Math.min(dec.recentCount + 1, CODE_BITS);
+      if (dec.recentCount === CODE_BITS && dec.recentBits === START_CODE) {
+        dec.state = "payload";
+        dec.frameBits.length = 0;
+        dec.bitScores.length = 0;
+        dec.previewText = "";
+        dec.previewConsumedBits = 0;
+        dec.previewActive = false;
+        dec.recentBits = 0;
+        dec.recentCount = 0;
+      }
+      return null;
+    }
+
+    if (dec.state !== "payload") return null;
+
+    dec.markerBits.push(bit);
+    dec.markerScores.push(s);
+
+    let flushedAny = false;
+    while (dec.markerBits.length) {
+      let matchesPrefix = true;
+      for (let i = 0; i < dec.markerBits.length; i += 1) {
+        if (dec.markerBits[i] !== END_MARK_BITS[i]) {
+          matchesPrefix = false;
+          break;
+        }
+      }
+      if (matchesPrefix) break;
+      const flushed = dec.markerBits.shift();
+      const flushedScore = dec.markerScores.shift();
+      dec.frameBits.push(flushed);
+      dec.bitScores.push(flushedScore);
+      updatePreview(dec);
+      flushedAny = true;
+    }
+
+    while (dec.markerBits.length >= CODE_BITS) {
+      const totalBits = dec.frameBits.length;
+      const payloadBitLength = totalBits - CRC_BITS;
+      if (payloadBitLength < 0 || payloadBitLength % CODE_BITS !== 0) {
+        const flushed = dec.markerBits.shift();
+        const flushedScore = dec.markerScores.shift();
+        dec.frameBits.push(flushed);
+        dec.bitScores.push(flushedScore);
+        updatePreview(dec);
+        continue;
+      }
+      const result = finalizeFrame(dec);
+      resetDec(dec);
+      return result;
+    }
+
+    dec.recentBits = ((dec.recentBits << 1) | bit) & START_END_MASK;
+    dec.recentCount = Math.min(dec.recentCount + 1, CODE_BITS);
+
+    if (!dec.markerBits.length && !flushedAny) updatePreview(dec);
+    return null;
+  }
+
+  function allPipelinesReady() {
+    if (!pipelineStates.size) return false;
+    for (const state of pipelineStates.values()) {
+      if (!state.ready) return false;
+    }
+    return true;
+  }
+
+  function flushPipelineReadyWaiters() {
+    if (!pipelineReadyWaiters.size) return;
+    if (!allPipelinesReady()) return;
+    for (const resolve of pipelineReadyWaiters) resolve();
+    pipelineReadyWaiters.clear();
+  }
+
+  function waitForPipelinesReady() {
+    if (allPipelinesReady()) return Promise.resolve();
+    return new Promise((resolve) => {
+      pipelineReadyWaiters.add(resolve);
+    });
+  }
+
+  function connectNodeToPipelines(node, type) {
+    for (const state of pipelineStates.values()) {
+      try {
+        const target = type === "sample" ? state.sampleGainNode : state.micGainNode;
+        node.connect(target);
+      } catch (err) {
+        console.warn(
+          `[${state.def.label}] connect failed`,
+          err?.message || err,
+        );
+      }
+    }
+  }
+
+  function disconnectNodeFromPipelines(node, type) {
+    for (const state of pipelineStates.values()) {
+      try {
+        const target = type === "sample" ? state.sampleGainNode : state.micGainNode;
+        node.disconnect(target);
+      } catch {}
+    }
+  }
+
+  function emitState(payload) {
+    events.emit("state", payload);
+  }
+
+  function handlePipelineCandidates(def, results) {
+    const freqSets = config.freqSets;
+    const threshold = config.pipelineThresholds.get(def.key) ?? DEFAULT_SCORE_MIN;
+    const dec = decoderStates.get(def.key);
+    if (!dec) return;
+
+    if (!Array.isArray(results) || !results.length) {
+      emitState({ kind: "freq", pipelineKey: def.key, freqHz: null });
+      emitState({ kind: "pipeline-status", pipelineKey: def.key, status: "idle" });
+      return;
+    }
+
+    let hadActive = false;
+    let hadFrameOk = false;
+    let pendingStatus = null;
+    const baseFreqs = freqSets[def.baseBankIndex] || [];
+
+    for (const r of results) {
+      if (!r || !r.active) continue;
+      hadActive = true;
+
+      if (Number.isFinite(r.idx)) {
+        let tones = toneLog.get(def.key);
+        if (!tones) {
+          tones = [];
+          toneLog.set(def.key, tones);
+        }
+        tones.push(r.idx);
+      }
+
+      const displayFreq =
+        Number.isFinite(r.freqHz) && r.freqHz > 0
+          ? r.freqHz
+          : Number.isFinite(baseFreqs[r.idx])
+            ? baseFreqs[r.idx]
+            : null;
+      emitState({ kind: "freq", pipelineKey: def.key, freqHz: displayFreq });
+
+      if ((r.score ?? 0) < threshold) continue;
+      const out = Number.isFinite(r.idx) ? feedOne(dec, r.idx, r.score) : null;
+      if (!out) continue;
+
+      events.emit("frame", {
+        pipelineKey: def.key,
+        label: def.label,
+        result: out,
+      });
+
+      if (out.ok && out.okCRC && out.text) {
+        emitState({
+          kind: "pipeline-status",
+          pipelineKey: def.key,
+          status: "frame OK",
+        });
+        if (!suppressReadyStatus) {
+          emitState({ kind: "status", status: `frame OK (${def.label})` });
+        }
+        hadFrameOk = true;
+        pendingStatus = null;
+      } else if (!out.okCRC) {
+        emitState({
+          kind: "pipeline-status",
+          pipelineKey: def.key,
+          status: "CRC fail",
+        });
+        if (!hadFrameOk && !pendingStatus) {
+          pendingStatus = `frame CRC fail (${def.label})`;
+        }
+      } else if (!out.ok) {
+        emitState({
+          kind: "pipeline-status",
+          pipelineKey: def.key,
+          status: "decode fail",
+        });
+        if (!hadFrameOk && !pendingStatus) {
+          pendingStatus = `frame decode fail (${def.label})`;
+        }
+      }
+    }
+
+    if (!hadActive) {
+      emitState({ kind: "freq", pipelineKey: def.key, freqHz: null });
+      emitState({
+        kind: "pipeline-status",
+        pipelineKey: def.key,
+        status: "idle",
+      });
+    } else if (!hadFrameOk && typeof pendingStatus === "string") {
+      emitState({ kind: "status", status: pendingStatus });
+    }
+  }
+
+  function handleWorkletMessage(state, message) {
+    if (!message) return;
+    const def = state.def;
+    if (message.pipeline && message.pipeline !== def.key) {
+      console.warn(`[${def.label}] ignoring message for ${message.pipeline}`);
+      return;
+    }
+    if (message.t === "ready") {
+      state.ready = true;
+      const sr =
+        Number.isFinite(message.sr) && message.sr > 0
+          ? `${Math.round(message.sr)} Hz`
+          : "";
+      emitState({
+        kind: "pipeline-status",
+        pipelineKey: def.key,
+        status: sr ? `ready (${sr})` : "ready",
+      });
+      if (!suppressReadyStatus && allPipelinesReady()) {
+        emitState({ kind: "status", status: "ready" });
+      }
+      flushPipelineReadyWaiters();
+      return;
+    }
+    if (message.t === "candidates") {
+      handlePipelineCandidates(def, message.results);
+    }
+  }
+
+  function resolveWorkletModuleUrl(baseUrl) {
+    if (baseUrl instanceof URL) return baseUrl;
+    if (typeof baseUrl === "function") return baseUrl();
+    return new URL(baseUrl, import.meta.url);
+  }
+
+  async function prepare(options = {}) {
+    suppressReadyStatus = Boolean(options?.suppressReadyStatus);
+    resetAllDecoders();
+    pipelineReadyWaiters.clear();
+    toneLog.clear();
+    emitState({ kind: "status", status: "initializing audio…" });
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+      latencyHint: "interactive",
+    });
+    emitState({ kind: "sample-rate", sampleRate: audioCtx.sampleRate });
+
+    const workletModuleUrl = resolveWorkletModuleUrl(config.workletUrl);
+    await audioCtx.audioWorklet.addModule(workletModuleUrl);
+
+    pipelineStates.clear();
+    decoderStates.clear();
+
+    for (const def of config.pipelineDefs) {
+      const workletNode = new AudioWorkletNode(audioCtx, "mb-fesk", {
+        numberOfInputs: 1,
+        numberOfOutputs: 0,
+      });
+      const micGainNode = audioCtx.createGain();
+      const sampleGainNode = audioCtx.createGain();
+      micGainNode.gain.value = Number.isFinite(def.micGain) && def.micGain > 0 ? def.micGain : 1;
+      sampleGainNode.gain.value =
+        Number.isFinite(def.sampleGain) && def.sampleGain > 0 ? def.sampleGain : 1;
+      micGainNode.connect(workletNode);
+      sampleGainNode.connect(workletNode);
+      const state = {
+        def,
+        workletNode,
+        micGainNode,
+        sampleGainNode,
+        ready: false,
+      };
+      pipelineStates.set(def.key, state);
+      decoderStates.set(def.key, mkDec(def.key, def.label));
+      workletNode.port.onmessage = (e) => handleWorkletMessage(state, e.data);
+      workletNode.port.postMessage({
+        pipelineKey: def.key,
+        freqSets: [config.detectorConfig[def.baseBankIndex]],
+        energyFloor: config.energy.floor,
+        energyOn: config.energy.on,
+        energyOff: config.energy.off,
+        minToneMs: config.energy.minToneMs,
+        minGapMs: config.energy.minGapMs,
+        ignoreHeadMs: config.energy.ignoreHeadMs,
+        envelopeMs: config.energy.envelopeMs,
+        hpCutoffHz: config.energy.hpCutoffHz,
+      });
+      emitState({
+        kind: "pipeline-status",
+        pipelineKey: def.key,
+        status: "initializing…",
+      });
+    }
+  }
+
+  async function attachStream(stream) {
+    if (!audioCtx) {
+      await prepare();
+      await waitForPipelinesReady();
+    }
+    if (mediaSrc) {
+      disconnectNodeFromPipelines(mediaSrc, "mic");
+      try {
+        mediaSrc.disconnect();
+      } catch {}
+    }
+    mediaSrc = audioCtx.createMediaStreamSource(stream);
+    connectNodeToPipelines(mediaSrc, "mic");
+    for (const state of pipelineStates.values()) {
+      emitState({
+        kind: "pipeline-status",
+        pipelineKey: state.def.key,
+        status: "listening…",
+      });
+    }
+    emitState({
+      kind: "status",
+      status: "listening… wait for 111110 start marker",
+    });
+    return mediaSrc;
+  }
+
+  async function attachBuffer(audioBuffer, options = {}) {
+    if (!audioCtx) {
+      await prepare({ suppressReadyStatus: options?.suppressReadyStatus });
+      await waitForPipelinesReady();
+    }
+    if (bufferSrc) {
+      bufferSrc.onended = null;
+      try {
+        bufferSrc.stop();
+      } catch {}
+      disconnectNodeFromPipelines(bufferSrc, "sample");
+      try {
+        bufferSrc.disconnect();
+      } catch {}
+    }
+    bufferSrc = audioCtx.createBufferSource();
+    bufferSrc.buffer = audioBuffer;
+    connectNodeToPipelines(bufferSrc, "sample");
+    const labelSuffix = options?.label ? ` ${options.label}` : "";
+    for (const state of pipelineStates.values()) {
+      emitState({
+        kind: "pipeline-status",
+        pipelineKey: state.def.key,
+        status: `sample${labelSuffix}…`.trim(),
+      });
+    }
+    emitState({ kind: "status", status: `playing sample${labelSuffix}…` });
+    bufferSrc.onended = () => {
+      disconnectNodeFromPipelines(bufferSrc, "sample");
+      bufferSrc = null;
+      emitState({ kind: "buffer-ended", label: options?.label || "" });
+    };
+    bufferSrc.start();
+    return bufferSrc;
+  }
+
+  async function stop(options = {}) {
+    const { status } = options || {};
+    pipelineReadyWaiters.forEach((resolve) => resolve());
+    pipelineReadyWaiters.clear();
+
+    if (bufferSrc) {
+      bufferSrc.onended = null;
+      try {
+        bufferSrc.stop();
+      } catch {}
+      disconnectNodeFromPipelines(bufferSrc, "sample");
+      try {
+        bufferSrc.disconnect();
+      } catch {}
+      bufferSrc = null;
+    }
+
+    if (mediaSrc) {
+      disconnectNodeFromPipelines(mediaSrc, "mic");
+      try {
+        mediaSrc.disconnect();
+      } catch {}
+      mediaSrc = null;
+    }
+
+    for (const state of pipelineStates.values()) {
+      state.ready = false;
+      try {
+        state.micGainNode.disconnect();
+      } catch {}
+      try {
+        state.sampleGainNode.disconnect();
+      } catch {}
+      try {
+        state.workletNode.disconnect();
+      } catch {}
+      state.workletNode.port.onmessage = null;
+    }
+    pipelineStates.clear();
+
+    if (audioCtx) {
+      try {
+        await audioCtx.close();
+      } catch {}
+      audioCtx = null;
+    }
+
+    resetAllDecoders();
+    suppressReadyStatus = false;
+    emitState({ kind: "sample-rate", sampleRate: null });
+    if (typeof status === "string") emitState({ kind: "status", status });
+  }
+
+  function drainToneLog() {
+    const copy = new Map();
+    for (const [key, tones] of toneLog.entries()) {
+      copy.set(key, [...tones]);
+    }
+    toneLog.clear();
+    return copy;
+  }
+
+  return {
+    config,
+    events,
+    prepare,
+    attachStream,
+    attachBuffer,
+    waitForReady: waitForPipelinesReady,
+    stop,
+    drainToneLog,
+    getAudioContext: () => audioCtx,
+  };
+}
+
+export const DEFAULT_FESK_DECODER_CONFIG = resolveConfig();
+
+export const __testUtils = {
+  bitsToCodes,
+  decodeCodes,
+  crc8ATM,
+  buildPipelineDefs,
+  buildPipelineThresholds,
+};
