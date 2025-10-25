@@ -34,6 +34,13 @@ const freqEls = new Map();
 const pipelineStatusEls = new Map();
 const pipelineOutputEls = new Map();
 const pipelinePreviewEls = new Map();
+const pipelineCandidates = new Map();
+
+let displayedCandidateKey = null;
+
+const CANDIDATE_INACTIVITY_MS = 2200;
+const CRC_LEADER_HOLD_MS = 4500;
+const CURRENT_LEADER_STICKINESS = 0.0025;
 const sampleButtons = SAMPLE_WAV_CONFIG.map(({ id, url, label }) => {
   const button = document.getElementById(id);
   return button ? { button, url, label } : null;
@@ -112,6 +119,8 @@ function setStatus(s) {
 function setupOutputContainers() {
   pipelineOutputEls.clear();
   pipelinePreviewEls.clear();
+  pipelineCandidates.clear();
+  displayedCandidateKey = null;
   outEl.textContent = "";
   PIPELINE_DEFS.forEach((def) => {
     const wrapper = document.createElement("div");
@@ -127,7 +136,7 @@ function setupOutputContainers() {
   });
 }
 
-function appendResult(pipelineKey, text) {
+function renderDecodedLine(pipelineKey, text) {
   if (!text) return;
   const target = pipelineOutputEls.get(pipelineKey);
   if (!target) return;
@@ -137,10 +146,11 @@ function appendResult(pipelineKey, text) {
   target.append(span);
 }
 
-function setPreview(pipelineKey, text, provisional) {
+function setPreview(pipelineKey, text, options = {}) {
   const target = pipelineOutputEls.get(pipelineKey);
   if (!target) return;
   const existing = pipelinePreviewEls.get(pipelineKey) || null;
+  const { provisional = true, crcOk = false } = options;
 
   if (text == null) {
     if (existing) {
@@ -150,25 +160,195 @@ function setPreview(pipelineKey, text, provisional) {
     return;
   }
 
-  if (!provisional) {
-    if (existing) {
-      existing.remove();
-      pipelinePreviewEls.delete(pipelineKey);
-    }
-    appendResult(pipelineKey, text);
-    return;
-  }
-
   let span = existing;
   if (!span || !target.contains(span)) {
     if (span) span.remove();
     span = document.createElement("span");
-    span.className = "provisional";
     pipelinePreviewEls.set(pipelineKey, span);
     target.append(span);
   }
+
   span.textContent = text;
-  span.className = "provisional";
+  if (!provisional && crcOk) {
+    span.className = "decoded-ok";
+  } else if (provisional) {
+    span.className = "provisional";
+  } else {
+    span.className = "provisional";
+  }
+}
+
+function clearPreview(pipelineKey) {
+  const existing = pipelinePreviewEls.get(pipelineKey);
+  if (existing) existing.remove();
+  pipelinePreviewEls.delete(pipelineKey);
+}
+
+function updateCandidate(pipelineKey, data) {
+  if (!pipelineKey || !data) return;
+  if (data.clear) {
+    pipelineCandidates.delete(pipelineKey);
+    if (displayedCandidateKey === pipelineKey) {
+      clearPreview(pipelineKey);
+      displayedCandidateKey = null;
+    }
+    return;
+  }
+
+  const now = Date.now();
+  const candidate = pipelineCandidates.get(pipelineKey) || {
+    pipelineKey,
+    text: "",
+    confidence: Number.NEGATIVE_INFINITY,
+    provisional: true,
+    crcOk: false,
+    lastCrcOkAt: null,
+    updatedAt: 0,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(data, "text")) {
+    candidate.text = data.text ?? "";
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, "provisional")) {
+    candidate.provisional = Boolean(data.provisional);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, "confidence")) {
+    const { confidence } = data;
+    if (Number.isFinite(confidence)) {
+      candidate.confidence = confidence;
+    }
+  }
+
+  const updatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : now;
+  candidate.updatedAt = updatedAt;
+
+  if (Object.prototype.hasOwnProperty.call(data, "crcOk")) {
+    if (data.crcOk === true) {
+      candidate.crcOk = true;
+      candidate.lastCrcOkAt = updatedAt;
+    } else if (data.crcOk === false) {
+      candidate.crcOk = false;
+    }
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(data, "lastCrcOkAt") &&
+    Number.isFinite(data.lastCrcOkAt)
+  ) {
+    candidate.lastCrcOkAt = data.lastCrcOkAt;
+  }
+
+  pipelineCandidates.set(pipelineKey, candidate);
+}
+
+function chooseDisplayedCandidate() {
+  const now = Date.now();
+  let bestKey = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  const toRemove = [];
+
+  for (const [pipelineKey, candidate] of pipelineCandidates.entries()) {
+    if (!candidate) continue;
+    const text = typeof candidate.text === "string" ? candidate.text : "";
+    const hasText = text && text.length > 0;
+    const age = now - (Number.isFinite(candidate.updatedAt) ? candidate.updatedAt : 0);
+    const isDisplayed = pipelineKey === displayedCandidateKey;
+
+    let inactivityLimit = CANDIDATE_INACTIVITY_MS;
+    if (candidate.lastCrcOkAt) {
+      const crcAge = now - candidate.lastCrcOkAt;
+      if (crcAge < CRC_LEADER_HOLD_MS) {
+        inactivityLimit = Math.max(inactivityLimit, CRC_LEADER_HOLD_MS);
+      }
+    }
+
+    if (age > inactivityLimit) {
+      if (isDisplayed) {
+        clearPreview(pipelineKey);
+        displayedCandidateKey = null;
+      }
+      toRemove.push(pipelineKey);
+      continue;
+    }
+
+    if (!hasText) {
+      if (isDisplayed) {
+        clearPreview(pipelineKey);
+        displayedCandidateKey = null;
+      }
+      continue;
+    }
+    if (!candidate.provisional && !candidate.crcOk) {
+      if (isDisplayed) {
+        clearPreview(pipelineKey);
+        displayedCandidateKey = null;
+      }
+      continue;
+    }
+
+    let score = Number.isFinite(candidate.confidence)
+      ? candidate.confidence
+      : Number.NEGATIVE_INFINITY;
+
+    if (candidate.crcOk) {
+      score += 2;
+    } else if (candidate.lastCrcOkAt) {
+      const crcAge = now - candidate.lastCrcOkAt;
+      if (crcAge < CRC_LEADER_HOLD_MS) {
+        const recency = 1 - crcAge / CRC_LEADER_HOLD_MS;
+        score += recency;
+      }
+    }
+
+    const agePenalty = age / 2000;
+    score -= agePenalty;
+
+    if (!candidate.provisional && candidate.crcOk) {
+      score += 0.25;
+    }
+
+    if (isDisplayed) {
+      score += CURRENT_LEADER_STICKINESS;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestKey = pipelineKey;
+    }
+  }
+
+  for (const key of toRemove) pipelineCandidates.delete(key);
+
+  if (bestKey === displayedCandidateKey) {
+    if (bestKey) {
+      const candidate = pipelineCandidates.get(bestKey);
+      if (candidate) {
+        setPreview(bestKey, candidate.text, {
+          provisional: candidate.provisional,
+          crcOk: Boolean(candidate.crcOk),
+        });
+      }
+    }
+    return;
+  }
+
+  if (displayedCandidateKey && displayedCandidateKey !== bestKey) {
+    clearPreview(displayedCandidateKey);
+  }
+
+  displayedCandidateKey = bestKey || null;
+
+  if (bestKey) {
+    const candidate = pipelineCandidates.get(bestKey);
+    if (candidate) {
+      setPreview(bestKey, candidate.text, {
+        provisional: candidate.provisional,
+        crcOk: Boolean(candidate.crcOk),
+      });
+    }
+  }
 }
 
 function clearPreviews() {
@@ -176,6 +356,8 @@ function clearPreviews() {
     if (span) span.remove();
   }
   pipelinePreviewEls.clear();
+  pipelineCandidates.clear();
+  displayedCandidateKey = null;
 }
 function formatFreq(f) {
   const txt = f.toFixed(1);
@@ -427,21 +609,56 @@ function handleDecoderState(payload) {
 
 function handleDecoderPreview(payload) {
   if (!payload || !payload.pipelineKey) return;
+  const pipelineKey = payload.pipelineKey;
+
   if (payload.text === null) {
-    setPreview(payload.pipelineKey, null, false);
+    clearPreview(pipelineKey);
+    updateCandidate(pipelineKey, { clear: true });
+    chooseDisplayedCandidate();
     return;
   }
+
   if (typeof payload.text === "string") {
-    setPreview(payload.pipelineKey, payload.text, Boolean(payload.provisional));
+    const update = {
+      text: payload.text,
+      provisional: Boolean(payload.provisional),
+      confidence: payload.confidence,
+      updatedAt: payload.updatedAt,
+    };
+    if (payload.crcOk === true) update.crcOk = true;
+    else if (payload.crcOk === false) update.crcOk = false;
+    updateCandidate(pipelineKey, update);
+    chooseDisplayedCandidate();
   }
 }
 
 function handleDecoderFrame(payload) {
   if (!payload) return;
+  const pipelineKey = payload.pipelineKey;
   const def = PIPELINE_BY_KEY.get(payload.pipelineKey);
   const label = def ? def.label : payload.label || payload.pipelineKey;
   const { result } = payload;
   if (!result) return;
+  if (pipelineKey && result.ok && result.crcOk && result.text) {
+    renderDecodedLine(pipelineKey, result.text);
+    updateCandidate(pipelineKey, {
+      text: result.text,
+      provisional: false,
+      confidence: result.confidence,
+      crcOk: true,
+      updatedAt: result.updatedAt,
+    });
+    chooseDisplayedCandidate();
+  } else if (pipelineKey) {
+    const update = {
+      provisional: true,
+      updatedAt: result.updatedAt,
+    };
+    if (result.crcOk === false) update.crcOk = false;
+    if (Number.isFinite(result.confidence)) update.confidence = result.confidence;
+    updateCandidate(pipelineKey, update);
+    chooseDisplayedCandidate();
+  }
   if (result.ok && result.crcOk && result.text) {
     const avgScore = Number.isFinite(result.confidence)
       ? result.confidence.toFixed(3)
