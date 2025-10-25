@@ -253,7 +253,8 @@ function chooseDisplayedCandidate() {
     if (!candidate) continue;
     const text = typeof candidate.text === "string" ? candidate.text : "";
     const hasText = text && text.length > 0;
-    const age = now - (Number.isFinite(candidate.updatedAt) ? candidate.updatedAt : 0);
+    const age =
+      now - (Number.isFinite(candidate.updatedAt) ? candidate.updatedAt : 0);
     const isDisplayed = pipelineKey === displayedCandidateKey;
 
     let inactivityLimit = CANDIDATE_INACTIVITY_MS;
@@ -655,7 +656,8 @@ function handleDecoderFrame(payload) {
       updatedAt: result.updatedAt,
     };
     if (result.crcOk === false) update.crcOk = false;
-    if (Number.isFinite(result.confidence)) update.confidence = result.confidence;
+    if (Number.isFinite(result.confidence))
+      update.confidence = result.confidence;
     updateCandidate(pipelineKey, update);
     chooseDisplayedCandidate();
   }
