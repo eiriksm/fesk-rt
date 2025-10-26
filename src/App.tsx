@@ -8,7 +8,14 @@ import {
 } from "react";
 
 import { DebugMetrics } from "./components/DebugMetrics";
-import { createFeskDecoder } from "./lib/decoder";
+import {
+  createFeskDecoder,
+  type DecoderFrameEvent,
+  type DecoderPreviewEvent,
+  type DecoderStateEvent,
+  type FeskDecoder,
+  type PipelineDefinition,
+} from "./lib/decoder";
 
 import "./App.css";
 
@@ -224,7 +231,9 @@ function candidateReducer(
   }
 }
 
-function createInitialDisplayMap(defs: { key: string }[]): Record<string, string> {
+function createInitialDisplayMap(
+  defs: { key: string }[],
+): Record<string, string> {
   const map: Record<string, string> = {};
   defs.forEach((def) => {
     map[def.key] = "—";
@@ -246,7 +255,10 @@ function decodeAudioDataBuffer(
   });
 }
 
-function toMonoBuffer(audioCtx: AudioContext, buffer: AudioBuffer): AudioBuffer {
+function toMonoBuffer(
+  audioCtx: AudioContext,
+  buffer: AudioBuffer,
+): AudioBuffer {
   if (buffer.numberOfChannels <= 1) return buffer;
   const length = buffer.length;
   const mono = audioCtx.createBuffer(1, length, buffer.sampleRate);
@@ -348,15 +360,18 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 }
 
 export function App() {
-  const decoderRef = useRef(createFeskDecoder());
+  const decoderRef = useRef<FeskDecoder>(createFeskDecoder());
   const decoder = decoderRef.current;
-  const pipelineDefs = useMemo(() => decoder.config.pipelineDefs, [decoder]);
+  const pipelineDefs = useMemo<PipelineDefinition[]>(
+    () => decoder.config.pipelineDefs,
+    [decoder],
+  );
   const pipelineByKey = useMemo(
-    () => new Map(pipelineDefs.map((def: any) => [def.key, def])),
+    () => new Map(pipelineDefs.map((def) => [def.key, def] as const)),
     [pipelineDefs],
   );
   const metricDefinitions = useMemo(
-    () => pipelineDefs.map((def: any) => ({ key: def.key, label: def.label })),
+    () => pipelineDefs.map((def) => ({ key: def.key, label: def.label })),
     [pipelineDefs],
   );
   const debugMode = useMemo(() => {
@@ -369,9 +384,9 @@ export function App() {
   const [frequencies, setFrequencies] = useState<Record<string, string>>(() =>
     createInitialDisplayMap(pipelineDefs),
   );
-  const [pipelineStatuses, setPipelineStatuses] = useState<Record<string, string>>(
-    () => createInitialDisplayMap(pipelineDefs),
-  );
+  const [pipelineStatuses, setPipelineStatuses] = useState<
+    Record<string, string>
+  >(() => createInitialDisplayMap(pipelineDefs));
   const [finalResult, setFinalResult] = useState<{
     pipelineKey: string | null;
     text: string;
@@ -422,7 +437,8 @@ export function App() {
 
   const finalLabel =
     debugMode && finalResult.pipelineKey
-      ? pipelineByKey.get(finalResult.pipelineKey)?.label || finalResult.pipelineKey
+      ? pipelineByKey.get(finalResult.pipelineKey)?.label ||
+        finalResult.pipelineKey
       : "";
 
   const clearRecording = useCallback(() => {
@@ -569,7 +585,10 @@ export function App() {
   }, [pipelineDefs]);
 
   const cleanup = useCallback(
-    async (nextStatus?: string | null, options?: { skipRecorderStop?: boolean }) => {
+    async (
+      nextStatus?: string | null,
+      options?: { skipRecorderStop?: boolean },
+    ) => {
       const { skipRecorderStop = false } = options ?? {};
       if (!skipRecorderStop) {
         await stopRecording({ finalize: false });
@@ -641,38 +660,54 @@ export function App() {
   );
 
   const handleStateEvent = useCallback(
-    (payload: any) => {
+    (payload: DecoderStateEvent) => {
       if (!payload) return;
       switch (payload.kind) {
         case "status":
           if (typeof payload.status === "string") setStatus(payload.status);
           break;
-        case "pipeline-status":
-          if (payload.pipelineKey) {
+        case "pipeline-status": {
+          const pipelineKey = payload.pipelineKey;
+          if (typeof pipelineKey === "string" && pipelineKey.length > 0) {
+            const status =
+              typeof payload.status === "string" ? payload.status : "—";
             setPipelineStatuses((prev) => ({
               ...prev,
-              [payload.pipelineKey]: payload.status ?? "—",
+              [pipelineKey]: status,
             }));
           }
           break;
-        case "freq":
-          if (payload.pipelineKey) {
+        }
+        case "freq": {
+          const pipelineKey = payload.pipelineKey;
+          if (typeof pipelineKey === "string" && pipelineKey.length > 0) {
+            const { freqHz } = payload;
+            const freq =
+              typeof freqHz === "number" &&
+              Number.isFinite(freqHz) &&
+              freqHz > 0
+                ? formatFrequency(freqHz)
+                : "—";
             setFrequencies((prev) => ({
               ...prev,
-              [payload.pipelineKey]:
-                Number.isFinite(payload.freqHz) && payload.freqHz > 0
-                  ? formatFrequency(Number(payload.freqHz))
-                  : "—",
+              [pipelineKey]: freq,
             }));
           }
           break;
-        case "sample-rate":
-          if (Number.isFinite(payload.sampleRate) && payload.sampleRate > 0) {
-            setSampleRateText(`${Number(payload.sampleRate).toFixed(0)} Hz`);
+        }
+        case "sample-rate": {
+          const { sampleRate } = payload;
+          if (
+            typeof sampleRate === "number" &&
+            Number.isFinite(sampleRate) &&
+            sampleRate > 0
+          ) {
+            setSampleRateText(`${sampleRate.toFixed(0)} Hz`);
           } else {
             setSampleRateText("—");
           }
           break;
+        }
         case "buffer-ended":
           handleSamplePlaybackEnded();
           break;
@@ -683,35 +718,32 @@ export function App() {
     [handleSamplePlaybackEnded],
   );
 
-  const handlePreviewEvent = useCallback(
-    (payload: any) => {
-      if (!payload?.pipelineKey) return;
-      const pipelineKey: string = payload.pipelineKey;
-      if (payload.text === null) {
-        dispatchCandidates({ type: "remove", pipelineKey });
-        return;
+  const handlePreviewEvent = useCallback((payload: DecoderPreviewEvent) => {
+    if (!payload?.pipelineKey) return;
+    const pipelineKey: string = payload.pipelineKey;
+    if (payload.text === null) {
+      dispatchCandidates({ type: "remove", pipelineKey });
+      return;
+    }
+    if (typeof payload.text === "string") {
+      const patch: CandidatePatch = {
+        text: payload.text,
+        provisional: Boolean(payload.provisional),
+      };
+      if (Number.isFinite(payload.updatedAt)) {
+        patch.updatedAt = Number(payload.updatedAt);
       }
-      if (typeof payload.text === "string") {
-        const patch: CandidatePatch = {
-          text: payload.text,
-          provisional: Boolean(payload.provisional),
-        };
-        if (Number.isFinite(payload.updatedAt)) {
-          patch.updatedAt = Number(payload.updatedAt);
-        }
-        if (Number.isFinite(payload.confidence)) {
-          patch.confidence = Number(payload.confidence);
-        }
-        if (payload.crcOk === true) patch.crcOk = true;
-        else if (payload.crcOk === false) patch.crcOk = false;
-        dispatchCandidates({ type: "update", pipelineKey, patch });
+      if (Number.isFinite(payload.confidence)) {
+        patch.confidence = Number(payload.confidence);
       }
-    },
-    [],
-  );
+      if (payload.crcOk === true) patch.crcOk = true;
+      else if (payload.crcOk === false) patch.crcOk = false;
+      dispatchCandidates({ type: "update", pipelineKey, patch });
+    }
+  }, []);
 
   const handleFrameEvent = useCallback(
-    (payload: any) => {
+    (payload: DecoderFrameEvent) => {
       if (!payload) return;
       const pipelineKey: string | undefined = payload.pipelineKey;
       const result = payload.result;
@@ -786,7 +818,7 @@ export function App() {
       });
       mediaStreamRef.current = stream;
       await decoder.attachStream(stream);
-      pipelineDefs.forEach((def: any) => {
+      pipelineDefs.forEach((def) => {
         console.info(`[${def.label}] microphone connected`);
       });
       clearRecording();
@@ -799,7 +831,15 @@ export function App() {
     } finally {
       setIsBusy(false);
     }
-  }, [cleanup, clearRecording, decoder, isBusy, pipelineDefs, runMode, setupRecorder]);
+  }, [
+    cleanup,
+    clearRecording,
+    decoder,
+    isBusy,
+    pipelineDefs,
+    runMode,
+    setupRecorder,
+  ]);
 
   const handlePlaySample = useCallback(
     async (entry: (typeof SAMPLE_WAV_CONFIG)[number]) => {
@@ -829,7 +869,7 @@ export function App() {
         }
         const playbackBuffer = toMonoBuffer(audioCtxInstance, audioBuffer);
         await decoder.attachBuffer(playbackBuffer, { label: entry.label });
-        pipelineDefs.forEach((def: any) => {
+        pipelineDefs.forEach((def) => {
           console.info(`[${def.label}] sample input connected`);
         });
         setRunMode("sample");
@@ -871,6 +911,7 @@ export function App() {
   }, [decoder, handleFrameEvent, handlePreviewEvent, handleStateEvent]);
 
   useEffect(() => {
+    const decoderInstance = decoderRef.current;
     return () => {
       const recorder = recorderRef.current;
       try {
@@ -882,17 +923,13 @@ export function App() {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
-      decoderRef.current
-        ?.stop()
-        .catch(() => undefined);
+      decoderInstance?.stop().catch(() => undefined);
     };
   }, []);
 
   const previewClassNames = ["out-row-text"];
   if (previewCandidate) {
-    previewClassNames.push(
-      previewIsProvisional ? "provisional" : "decoded-ok",
-    );
+    previewClassNames.push(previewIsProvisional ? "provisional" : "decoded-ok");
   }
 
   const previewLabelHidden = !debugMode || !previewLabel;
@@ -959,9 +996,7 @@ export function App() {
             <div className="out-row-label" hidden={previewLabelHidden}>
               {previewLabel}
             </div>
-            <div className={previewClassNames.join(" ")}>
-              {previewText}
-            </div>
+            <div className={previewClassNames.join(" ")}>{previewText}</div>
           </div>
         </div>
         <div className="out-row result-row">
