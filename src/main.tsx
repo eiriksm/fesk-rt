@@ -23,6 +23,9 @@ const PIPELINE_DEFS = decoder.config.pipelineDefs;
 const PIPELINE_BY_KEY = new Map(PIPELINE_DEFS.map((def) => [def.key, def]));
 
 // =================== UI helpers ===================
+const params = new URLSearchParams(window.location.search);
+const DEBUG_MODE = params.get("debug") === "1";
+
 const statusEl = document.getElementById("status");
 const outEl = document.getElementById("out");
 const srEl = document.getElementById("sr");
@@ -48,6 +51,11 @@ const sampleButtons = SAMPLE_WAV_CONFIG.map(({ id, url, label }) => {
   const button = document.getElementById(id);
   return button ? { button, url, label } : null;
 }).filter(Boolean);
+
+const debugPanel = document.querySelector("details.debug-panel");
+if (!DEBUG_MODE && debugPanel) {
+  debugPanel.hidden = true;
+}
 
 const pipelineDebugMetricsContainer = document.getElementById(
   "pipelineDebugMetrics",
@@ -134,7 +142,7 @@ function setupOutputContainers() {
   previewRow.className = "out-row preview-row";
   const previewHeader = document.createElement("div");
   previewHeader.className = "out-row-header";
-  previewHeader.textContent = "Current candidate";
+  previewHeader.textContent = "real time";
   const previewContent = document.createElement("div");
   previewContent.className = "out-row-content";
   const previewLabel = document.createElement("div");
@@ -196,7 +204,7 @@ function renderDecodedLine(pipelineKey, text) {
   if (finalResultLabelEl) {
     const def = pipelineKey ? PIPELINE_BY_KEY.get(pipelineKey) : null;
     const label = def ? def.label : pipelineKey || "";
-    if (label) {
+    if (DEBUG_MODE && label) {
       finalResultLabelEl.textContent = label;
       finalResultLabelEl.hidden = false;
     } else {
@@ -226,7 +234,7 @@ function setPreview(pipelineKey, text, options = {}) {
   if (currentCandidateLabelEl) {
     const def = pipelineKey ? PIPELINE_BY_KEY.get(pipelineKey) : null;
     const label = def ? def.label : pipelineKey || "";
-    if (label) {
+    if (DEBUG_MODE && label) {
       currentCandidateLabelEl.textContent = label;
       currentCandidateLabelEl.hidden = false;
     } else {
