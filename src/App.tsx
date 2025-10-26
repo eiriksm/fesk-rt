@@ -20,14 +20,22 @@ import {
 import "./App.css";
 
 const SAMPLE_WAV_CONFIG = [
-  { url: "sample.wav", label: "1" },
-  { url: "sample2.wav", label: "2" },
-  { url: "sample32.wav", label: "3" },
-  { url: "sample4.wav", label: "4" },
-  { url: "sample-clock-on-laptop.wav", label: "5" },
-  { url: "sample-clock-recorder-on-phone.wav", label: "6" },
-  { url: "sample-fast.wav", label: "7" },
-  { url: "sample-phone-recording-fast.wav", label: "8" },
+  { id: "sample1Btn", url: "sample.wav", label: "1" },
+  { id: "sample2Btn", url: "sample2.wav", label: "2" },
+  { id: "sample3Btn", url: "sample32.wav", label: "3" },
+  { id: "sample4Btn", url: "sample4.wav", label: "4" },
+  { id: "sample5Btn", url: "sample-clock-on-laptop.wav", label: "5" },
+  {
+    id: "sample6Btn",
+    url: "sample-clock-recorder-on-phone.wav",
+    label: "6",
+  },
+  { id: "sample7Btn", url: "sample-fast.wav", label: "7" },
+  {
+    id: "sample8Btn",
+    url: "sample-phone-recording-fast.wav",
+    label: "8",
+  },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
@@ -587,9 +595,10 @@ export function App() {
   const cleanup = useCallback(
     async (
       nextStatus?: string | null,
-      options?: { skipRecorderStop?: boolean },
+      options?: { skipRecorderStop?: boolean; resetFinalResult?: boolean },
     ) => {
-      const { skipRecorderStop = false } = options ?? {};
+      const { skipRecorderStop = false, resetFinalResult = false } =
+        options ?? {};
       if (!skipRecorderStop) {
         await stopRecording({ finalize: false });
       }
@@ -602,12 +611,14 @@ export function App() {
       resetDisplays();
       setSampleRateText("—");
       dispatchCandidates({ type: "reset" });
-      setFinalResult({ pipelineKey: null, text: "" });
+      if (resetFinalResult) {
+        setFinalResult({ pipelineKey: null, text: "" });
+      }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
       setStatus(nextStatus ?? "idle");
     },
-    [decoder, dispatchCandidates, resetDisplays, stopRecording],
+    [decoder, dispatchCandidates, resetDisplays, setFinalResult, stopRecording],
   );
 
   const logTones = useCallback(() => {
@@ -804,7 +815,7 @@ export function App() {
     if (isBusy || runMode !== "idle") return;
     setIsBusy(true);
     try {
-      await cleanup(null);
+      await cleanup(null, { resetFinalResult: true });
       await decoder.prepare();
       await decoder.waitForReady();
       setStatus("requesting microphone…");
@@ -846,7 +857,7 @@ export function App() {
       if (isBusy || runMode !== "idle") return;
       setIsBusy(true);
       try {
-        await cleanup(null);
+        await cleanup(null, { resetFinalResult: true });
         await decoder.prepare({ suppressReadyStatus: true });
         await decoder.waitForReady();
         const labelSuffix = entry.label ? ` ${entry.label}` : "";
@@ -874,7 +885,7 @@ export function App() {
         });
         setRunMode("sample");
       } catch (err) {
-        await cleanup(null);
+        await cleanup(null, { resetFinalResult: true });
         const message = err instanceof Error ? err.message : String(err);
         setStatus(`error: ${message}`);
       } finally {
@@ -943,13 +954,14 @@ export function App() {
     <div className="app">
       <h1>FESK Real-Time Decoder</h1>
       <div className="row controls">
-        <button onClick={handleStart} disabled={startDisabled}>
+        <button id="startBtn" onClick={handleStart} disabled={startDisabled}>
           Start 🎙️
         </button>
-        <button onClick={handleStop} disabled={stopDisabled}>
+        <button id="stopBtn" onClick={handleStop} disabled={stopDisabled}>
           Stop 🚫
         </button>
         <button
+          id="downloadBtn"
           onClick={handleDownload}
           disabled={downloadDisabled}
           title={downloadTitle}
@@ -963,6 +975,7 @@ export function App() {
           <div className="debug-controls">
             {SAMPLE_WAV_CONFIG.map((entry) => (
               <button
+                id={entry.id}
                 key={entry.url}
                 onClick={() => handlePlaySample(entry)}
                 disabled={sampleButtonsDisabled}
