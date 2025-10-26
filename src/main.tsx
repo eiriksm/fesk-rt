@@ -142,7 +142,7 @@ function setupOutputContainers() {
   previewRow.className = "out-row preview-row";
   const previewHeader = document.createElement("div");
   previewHeader.className = "out-row-header";
-  previewHeader.textContent = "real time";
+  previewHeader.textContent = "Real time";
   const previewContent = document.createElement("div");
   previewContent.className = "out-row-content";
   const previewLabel = document.createElement("div");
