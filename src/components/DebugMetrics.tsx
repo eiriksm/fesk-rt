@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 
 export interface DebugMetricDefinition {
   key: string;
@@ -7,25 +7,26 @@ export interface DebugMetricDefinition {
 
 interface DebugMetricsProps {
   definitions: DebugMetricDefinition[];
-  onReady?: () => void;
+  frequencies: Record<string, string>;
+  statuses: Record<string, string>;
 }
 
-export function DebugMetrics({ definitions, onReady }: DebugMetricsProps) {
-  useEffect(() => {
-    onReady?.();
-  }, [onReady]);
-
+export function DebugMetrics({
+  definitions,
+  frequencies,
+  statuses,
+}: DebugMetricsProps) {
   return (
     <>
       {definitions.map((def) => (
         <React.Fragment key={def.key}>
           <div className="debug-metric">
             <strong>{def.label} Hz:</strong>{" "}
-            <span id={`freq-${def.key}`}>—</span>
+            <span>{frequencies[def.key] ?? "—"}</span>
           </div>
           <div className="debug-metric">
             <strong>{def.label} status:</strong>{" "}
-            <span id={`status-${def.key}`}>—</span>
+            <span>{statuses[def.key] ?? "—"}</span>
           </div>
         </React.Fragment>
       ))}
