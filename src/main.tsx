@@ -23,6 +23,9 @@ const PIPELINE_DEFS = decoder.config.pipelineDefs;
 const PIPELINE_BY_KEY = new Map(PIPELINE_DEFS.map((def) => [def.key, def]));
 
 // =================== UI helpers ===================
+const params = new URLSearchParams(window.location.search);
+const DEBUG_MODE = params.get("debug") === "1";
+
 const statusEl = document.getElementById("status");
 const outEl = document.getElementById("out");
 const srEl = document.getElementById("sr");
@@ -32,9 +35,12 @@ const downloadBtn = document.getElementById("downloadBtn");
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
 const freqEls = new Map();
 const pipelineStatusEls = new Map();
-const pipelineOutputEls = new Map();
-const pipelinePreviewEls = new Map();
 const pipelineCandidates = new Map();
+
+let currentCandidateLabelEl = null;
+let currentCandidateTextEl = null;
+let finalResultLabelEl = null;
+let finalResultTextEl = null;
 
 let displayedCandidateKey = null;
 
@@ -45,6 +51,11 @@ const sampleButtons = SAMPLE_WAV_CONFIG.map(({ id, url, label }) => {
   const button = document.getElementById(id);
   return button ? { button, url, label } : null;
 }).filter(Boolean);
+
+const debugPanel = document.querySelector("details.debug-panel");
+if (!DEBUG_MODE && debugPanel) {
+  debugPanel.hidden = true;
+}
 
 const pipelineDebugMetricsContainer = document.getElementById(
   "pipelineDebugMetrics",
@@ -117,71 +128,126 @@ function setStatus(s) {
   statusEl.textContent = s;
 }
 function setupOutputContainers() {
-  pipelineOutputEls.clear();
-  pipelinePreviewEls.clear();
   pipelineCandidates.clear();
   displayedCandidateKey = null;
+
+  currentCandidateLabelEl = null;
+  currentCandidateTextEl = null;
+  finalResultLabelEl = null;
+  finalResultTextEl = null;
+
   outEl.textContent = "";
-  PIPELINE_DEFS.forEach((def) => {
-    const wrapper = document.createElement("div");
-    wrapper.className = "out-bank";
-    const title = document.createElement("div");
-    title.className = "out-bank-title";
-    title.textContent = def.label;
-    const body = document.createElement("div");
-    body.className = "out-bank-body";
-    wrapper.append(title, body);
-    outEl.append(wrapper);
-    pipelineOutputEls.set(def.key, body);
-  });
+
+  const previewRow = document.createElement("div");
+  previewRow.className = "out-row preview-row";
+  const previewHeader = document.createElement("div");
+  previewHeader.className = "out-row-header";
+  previewHeader.textContent = "Real time";
+  const previewContent = document.createElement("div");
+  previewContent.className = "out-row-content";
+  const previewLabel = document.createElement("div");
+  previewLabel.className = "out-row-label";
+  previewLabel.hidden = true;
+  const previewText = document.createElement("div");
+  previewText.className = "out-row-text";
+  previewContent.append(previewLabel, previewText);
+  previewRow.append(previewHeader, previewContent);
+  outEl.append(previewRow);
+
+  currentCandidateLabelEl = previewLabel;
+  currentCandidateTextEl = previewText;
+
+  const resultRow = document.createElement("div");
+  resultRow.className = "out-row result-row";
+  const resultHeader = document.createElement("div");
+  resultHeader.className = "out-row-header";
+  resultHeader.textContent = "Final result";
+  const resultContent = document.createElement("div");
+  resultContent.className = "out-row-content";
+  const resultLabel = document.createElement("div");
+  resultLabel.className = "out-row-label";
+  resultLabel.hidden = true;
+  const resultText = document.createElement("span");
+  resultText.className = "out-row-text decoded-ok";
+  resultContent.append(resultLabel, resultText);
+  resultRow.append(resultHeader, resultContent);
+  outEl.append(resultRow);
+
+  finalResultLabelEl = resultLabel;
+  finalResultTextEl = resultText;
+
+  resetCurrentCandidateDisplay();
+  if (finalResultLabelEl) {
+    finalResultLabelEl.textContent = "";
+    finalResultLabelEl.hidden = true;
+  }
+  if (finalResultTextEl) {
+    finalResultTextEl.textContent = "";
+    finalResultTextEl.classList.add("decoded-ok");
+  }
+}
+
+function resetCurrentCandidateDisplay() {
+  if (!currentCandidateTextEl) return;
+  currentCandidateTextEl.textContent = "";
+  currentCandidateTextEl.classList.remove("decoded-ok", "provisional");
+  if (currentCandidateLabelEl) {
+    currentCandidateLabelEl.textContent = "";
+    currentCandidateLabelEl.hidden = true;
+  }
 }
 
 function renderDecodedLine(pipelineKey, text) {
-  if (!text) return;
-  const target = pipelineOutputEls.get(pipelineKey);
-  if (!target) return;
-  const span = document.createElement("span");
-  span.className = "decoded-ok";
-  span.textContent = text;
-  target.append(span);
+  if (!text || !finalResultTextEl) return;
+  finalResultTextEl.textContent = text;
+  finalResultTextEl.classList.add("decoded-ok");
+  if (finalResultLabelEl) {
+    const def = pipelineKey ? PIPELINE_BY_KEY.get(pipelineKey) : null;
+    const label = def ? def.label : pipelineKey || "";
+    if (DEBUG_MODE && label) {
+      finalResultLabelEl.textContent = label;
+      finalResultLabelEl.hidden = false;
+    } else {
+      finalResultLabelEl.textContent = "";
+      finalResultLabelEl.hidden = true;
+    }
+  }
 }
 
 function setPreview(pipelineKey, text, options = {}) {
-  const target = pipelineOutputEls.get(pipelineKey);
-  if (!target) return;
-  const existing = pipelinePreviewEls.get(pipelineKey) || null;
+  if (!currentCandidateTextEl) return;
   const { provisional = true, crcOk = false } = options;
 
-  if (text == null) {
-    if (existing) {
-      existing.remove();
-      pipelinePreviewEls.delete(pipelineKey);
-    }
+  if (text == null || text === "") {
+    clearPreview(pipelineKey);
     return;
   }
 
-  let span = existing;
-  if (!span || !target.contains(span)) {
-    if (span) span.remove();
-    span = document.createElement("span");
-    pipelinePreviewEls.set(pipelineKey, span);
-    target.append(span);
+  currentCandidateTextEl.textContent = text;
+  currentCandidateTextEl.classList.remove("decoded-ok", "provisional");
+  if (!provisional && crcOk) {
+    currentCandidateTextEl.classList.add("decoded-ok");
+  } else {
+    currentCandidateTextEl.classList.add("provisional");
   }
 
-  span.textContent = text;
-  if (!provisional && crcOk) {
-    span.className = "decoded-ok";
-  } else if (provisional) {
-    span.className = "provisional";
-  } else {
-    span.className = "provisional";
+  if (currentCandidateLabelEl) {
+    const def = pipelineKey ? PIPELINE_BY_KEY.get(pipelineKey) : null;
+    const label = def ? def.label : pipelineKey || "";
+    if (DEBUG_MODE && label) {
+      currentCandidateLabelEl.textContent = label;
+      currentCandidateLabelEl.hidden = false;
+    } else {
+      currentCandidateLabelEl.textContent = "";
+      currentCandidateLabelEl.hidden = true;
+    }
   }
 }
 
 function clearPreview(pipelineKey) {
-  const existing = pipelinePreviewEls.get(pipelineKey);
-  if (existing) existing.remove();
-  pipelinePreviewEls.delete(pipelineKey);
+  if (!currentCandidateTextEl) return;
+  if (pipelineKey && pipelineKey !== displayedCandidateKey) return;
+  resetCurrentCandidateDisplay();
 }
 
 function updateCandidate(pipelineKey, data) {
@@ -353,10 +419,7 @@ function chooseDisplayedCandidate() {
 }
 
 function clearPreviews() {
-  for (const span of pipelinePreviewEls.values()) {
-    if (span) span.remove();
-  }
-  pipelinePreviewEls.clear();
+  resetCurrentCandidateDisplay();
   pipelineCandidates.clear();
   displayedCandidateKey = null;
 }

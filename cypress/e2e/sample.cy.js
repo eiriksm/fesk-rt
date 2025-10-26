@@ -7,7 +7,7 @@ const THAT_REPEATING_TEST_DECODING = "abc9012";
 
 describe("FESK real time with known samples", () => {
   it("should decode audio from sample 1", () => {
-    cy.visit("/");
+    cy.visit("/?debug=1");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample1Btn").click();
@@ -17,7 +17,7 @@ describe("FESK real time with known samples", () => {
   });
 
   it("should decode audio from sample 2", () => {
-    cy.visit("/");
+    cy.visit("/?debug=1");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample2Btn").click();
@@ -27,7 +27,7 @@ describe("FESK real time with known samples", () => {
   });
 
   it("should decode audio from sample 3", () => {
-    cy.visit("/");
+    cy.visit("/?debug=1");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample3Btn").click();
@@ -37,7 +37,7 @@ describe("FESK real time with known samples", () => {
   });
 
   it("should decode audio from sample 4", () => {
-    cy.visit("/");
+    cy.visit("/?debug=1");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample4Btn").click();
@@ -47,7 +47,7 @@ describe("FESK real time with known samples", () => {
   });
 
   it("should decode audio from sample 5", () => {
-    cy.visit("/");
+    cy.visit("/?debug=1");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample5Btn").click();
@@ -57,7 +57,7 @@ describe("FESK real time with known samples", () => {
   });
 
   it("Should decode audio from sample 6", () => {
-    cy.visit("/");
+    cy.visit("/?debug=1");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample6Btn").click();
@@ -67,7 +67,7 @@ describe("FESK real time with known samples", () => {
   });
 
   it("Should decode audio from sample 7", () => {
-    cy.visit("/");
+    cy.visit("/?debug=1");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample7Btn").click();
@@ -77,7 +77,7 @@ describe("FESK real time with known samples", () => {
   });
 
   it("Should decode audio from sample 8", () => {
-    cy.visit("/");
+    cy.visit("/?debug=1");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample8Btn").click();
