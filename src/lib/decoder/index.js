@@ -734,6 +734,15 @@ export function createFeskDecoder(overrides = {}) {
     return new URL(baseUrl, import.meta.url);
   }
 
+  async function ensureReady(options = {}) {
+    const suppressReadyStatus = Boolean(options?.suppressReadyStatus);
+    if (!audioCtx) {
+      await prepare({ suppressReadyStatus });
+    }
+    await waitForPipelinesReady();
+    return audioCtx;
+  }
+
   async function prepare(options = {}) {
     suppressReadyStatus = Boolean(options?.suppressReadyStatus);
     resetAllDecoders();
@@ -794,11 +803,8 @@ export function createFeskDecoder(overrides = {}) {
     }
   }
 
-  async function attachStream(stream) {
-    if (!audioCtx) {
-      await prepare();
-      await waitForPipelinesReady();
-    }
+  async function attachStream(stream, options = {}) {
+    await ensureReady(options);
     if (mediaSrc) {
       disconnectNodeFromPipelines(mediaSrc, "mic");
       try {
@@ -822,10 +828,7 @@ export function createFeskDecoder(overrides = {}) {
   }
 
   async function attachBuffer(audioBuffer, options = {}) {
-    if (!audioCtx) {
-      await prepare({ suppressReadyStatus: options?.suppressReadyStatus });
-      await waitForPipelinesReady();
-    }
+    await ensureReady(options);
     if (bufferSrc) {
       bufferSrc.onended = null;
       try {
@@ -919,12 +922,73 @@ export function createFeskDecoder(overrides = {}) {
     return copy;
   }
 
+  async function listenToMic(options = {}) {
+    const { stream, constraints = { audio: true }, getMediaStream, suppressReadyStatus } =
+      options || {};
+
+    if (stream) {
+      await attachStream(stream, { suppressReadyStatus });
+      return stream;
+    }
+
+    const constraintsToUse = constraints ?? { audio: true };
+    const resolveStream =
+      typeof getMediaStream === "function"
+        ? () => getMediaStream(constraintsToUse)
+        : () => {
+            if (!navigator?.mediaDevices?.getUserMedia) {
+              throw new Error("Media devices API is not available");
+            }
+            return navigator.mediaDevices.getUserMedia(constraintsToUse);
+          };
+
+    const resolvedStream = await resolveStream();
+    if (!resolvedStream) {
+      throw new Error("Failed to acquire a microphone stream");
+    }
+
+    await attachStream(resolvedStream, { suppressReadyStatus });
+    return resolvedStream;
+  }
+
+  async function decodeSampleUrl(sampleUrl, options = {}) {
+    const { fetch: fetchImpl = typeof fetch === "function" ? fetch : null, label, suppressReadyStatus } =
+      options || {};
+
+    if (typeof fetchImpl !== "function") {
+      throw new Error("A fetch implementation is required to decode sample audio");
+    }
+
+    await ensureReady({ suppressReadyStatus });
+
+    const response = await fetchImpl(sampleUrl);
+    if (!response || !response.ok) {
+      const statusText = response?.statusText ? ` ${response.statusText}` : "";
+      throw new Error(`Failed to load sample ${sampleUrl}: ${response?.status ?? "unknown"}${statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    if (!audioCtx) {
+      throw new Error("AudioContext unavailable while decoding sample audio");
+    }
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    return attachBuffer(audioBuffer, {
+      label: typeof label === "string" && label.length ? label : sampleUrl,
+      suppressReadyStatus,
+    });
+  }
+
+  const on = (event, handler) => events.on(event, handler);
+
   return {
     config,
     events,
+    on,
     prepare,
     attachStream,
     attachBuffer,
+    listenToMic,
+    decodeSampleUrl,
     waitForReady: waitForPipelinesReady,
     stop,
     drainToneLog,
