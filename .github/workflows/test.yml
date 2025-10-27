@@ -164,7 +164,7 @@ jobs:
           CYPRESS_recordDurationMs: ${{ matrix.recordDurationMs || '' }}
           CYPRESS_decodeTimeoutMs: ${{ matrix.decodeTimeoutMs || '' }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: failure()
         with:
           name: screenshots-${{ matrix.name }}
