@@ -89,5 +89,4 @@ FESK is a word play on FSK [(Frequency-shift keying](https://en.wikipedia.org/wi
 
 ## Built with AI Assistance
 
-This project is crafted with help from AI collaborators while always remaining under human supervision. OpenAI's gpt-5-codex model assists with coding reviews and implementation planning, and Anthropic's Claude 3.5 Sonnet model provides complementary insights during those same review and planning sessions. Together they accelerate development without replacing the judgment of the humans who guide every change.
-
+This project is crafted with help from AI tools but steered with human supervision. OpenAI's gpt-5-codex model assists with code, code reviews and implementation planning, and Anthropic's Claude 3.5 Sonnet model has provided complementary insights during those same review and planning sessions. It's very, very far from a one shot prompt 😅
