@@ -954,6 +954,17 @@ export function App() {
   return (
     <div className="app">
       <h1>FESK Real-Time Decoder</h1>
+      <p className="repo-link">
+        View the code on{' '}
+        <a
+          href="https://github.com/eiriksm/fesk-rt"
+          target="_blank"
+          rel="noreferrer"
+        >
+          GitHub
+        </a>
+        .
+      </p>
       <div className="row controls">
         <button id="startBtn" onClick={handleStart} disabled={startDisabled}>
           Start 🎙️

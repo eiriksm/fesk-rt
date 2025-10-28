@@ -27,6 +27,22 @@ h1 {
   font-size: clamp(1.5rem, 2.5vw, 2rem);
 }
 
+.repo-link {
+  margin: -0.5rem 0 1.5rem;
+  font-size: 0.95rem;
+  color: #444;
+}
+
+.repo-link a {
+  color: inherit;
+  font-weight: 600;
+}
+
+.repo-link a:hover,
+.repo-link a:focus-visible {
+  text-decoration: underline;
+}
+
 button {
   padding: 0.6rem 1.1rem;
   border: 1px solid #ccc;
