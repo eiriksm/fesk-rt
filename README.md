@@ -87,3 +87,6 @@ characters.
 ## Why "FESK"?
 FESK is a word play on FSK [(Frequency-shift keying](https://en.wikipedia.org/wiki/Frequency-shift_keying)). The FESK protocol itself is a binary FSK (BFSK). But the word “fesk” means “fish” in northern Norwegian dialect. Coincidentally, in Norway, I would say one can also use the word as a mild swear word. Something like “what the fish” or “oh… fish!”
 
+## Built with AI Assistance
+
+This project is crafted with help from AI tools but steered with human supervision. OpenAI's gpt-5-codex model assists with code, code reviews and implementation planning, and Anthropic's Claude 3.5 Sonnet model has provided complementary insights during those same review and planning sessions. It's very, very far from a one shot prompt 😅
