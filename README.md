@@ -3,6 +3,10 @@
 
 FESK decoding, real time ⚡
 
+## Generating a transmission
+
+If you need a companion signal to test the decoder, build the FESK tx library that ships with the [Second Movement firmware for Sensor Watch](https://github.com/joeycastillo/Second-Movement). After following its setup guide to install the Arm toolchain, enable the FESK tx face in your watch build and flash the resulting UF2 to your Sensor Watch as described in the [official hardware documentation](https://www.sensorwatch.net). Once the face is running you can compose a payload on the watch to broadcast a FESK frame; record that transmission with this app to verify end-to-end decoding.
+
 ## Supported character codes
 
 The decoder recognises the following 6-bit codes. The table lists every
