@@ -36,6 +36,7 @@ const SAMPLE_WAV_CONFIG = [
     url: "sample-phone-recording-fast.wav",
     label: "8",
   },
+  { id: "sample9Btn", url: "sample-uptime-sim.wav", label: "9" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
