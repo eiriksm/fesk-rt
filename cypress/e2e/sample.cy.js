@@ -95,5 +95,4 @@ describe("FESK real time with known samples", () => {
       .should("not.be.empty")
       .should("contain.text", "uptime 41 seconds");
   });
-
 });
