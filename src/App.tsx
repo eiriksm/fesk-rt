@@ -1027,7 +1027,6 @@ export function App() {
         View the code on{' '}
         <a
           href="https://github.com/eiriksm/fesk-rt"
-          target="_blank"
           rel="noreferrer"
         >
           GitHub
