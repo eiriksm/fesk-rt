@@ -55,20 +55,34 @@ describe("decoder internals", () => {
     const bank0Defs = config.pipelineDefs.filter(
       (def) => def.baseBankIndex === 0,
     );
-    expect(bank0Defs).toHaveLength(11);
-    expect(bank0Defs[0]).toMatchObject({
+    expect(bank0Defs).toHaveLength(30);
+
+    const baseDef = bank0Defs.find((def) => def.key === "bank-0");
+    expect(baseDef).toMatchObject({
       key: "bank-0",
       label: "Bank A",
       micGain: 1,
       sampleGain: 1,
     });
-    expect(bank0Defs[1]).toMatchObject({
-      key: "bank-0-x2",
-      label: "Bank A ×2",
-      micGain: 2,
-      sampleGain: 2,
+
+    const zeroDef = bank0Defs.find((def) => def.key === "bank-0-x0");
+    expect(zeroDef).toMatchObject({
+      key: "bank-0-x0",
+      label: "Bank A ×0",
+      micGain: 0,
+      sampleGain: 0,
     });
-    expect(bank0Defs[bank0Defs.length - 1]).toMatchObject({
+
+    const fineDef = bank0Defs.find((def) => def.key === "bank-0-x0-1");
+    expect(fineDef).toMatchObject({
+      key: "bank-0-x0-1",
+      label: "Bank A ×0.1",
+      micGain: 0.1,
+      sampleGain: 0.1,
+    });
+
+    const maxDef = bank0Defs.find((def) => def.key === "bank-0-x20");
+    expect(maxDef).toMatchObject({
       key: "bank-0-x20",
       label: "Bank A ×20",
       micGain: 20,

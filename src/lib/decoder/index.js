@@ -26,7 +26,17 @@ const DEFAULT_ENERGY = {
   hpCutoffHz: 600,
 };
 
-const DEFAULT_GAIN_MULTIPLIERS = [1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
+const FINE_GAIN_MULTIPLIERS = Array.from({ length: 21 }, (_, idx) =>
+  Number((idx * 0.1).toFixed(1)),
+);
+
+const COARSE_GAIN_MULTIPLIERS = Array.from({ length: 11 }, (_, idx) =>
+  (idx === 0 ? 1 : idx * 2),
+);
+
+const DEFAULT_GAIN_MULTIPLIERS = Array.from(
+  new Set([...FINE_GAIN_MULTIPLIERS, ...COARSE_GAIN_MULTIPLIERS]),
+);
 
 const DEFAULT_GAIN_CONFIG = {
   micBase: 1,
@@ -125,17 +135,30 @@ function buildPipelineDefs(freqSets, options = {}) {
 
   const normalizedMultipliers = Array.from(new Set(multipliers))
     .map((value) => Number(value))
-    .filter((value) => Number.isFinite(value) && value > 0)
+    .filter((value) => Number.isFinite(value) && value >= 0)
     .sort((a, b) => a - b);
 
   if (!normalizedMultipliers.some((value) => Math.abs(value - 1) < 1e-9)) {
-    normalizedMultipliers.unshift(1);
+    normalizedMultipliers.push(1);
+    normalizedMultipliers.sort((a, b) => a - b);
   }
+
+  const baseMultiplier = normalizedMultipliers.find(
+    (value) => Math.abs(value - 1) < 1e-9,
+  );
+
+  const orderedMultipliers = baseMultiplier
+    ? [
+        baseMultiplier,
+        ...normalizedMultipliers.filter((value) => value < baseMultiplier),
+        ...normalizedMultipliers.filter((value) => value > baseMultiplier),
+      ]
+    : normalizedMultipliers;
 
   const defs = [];
   freqSets.forEach((_, idx) => {
     const baseLabel = bankLabel(idx, bankLabelOverrides);
-    normalizedMultipliers.forEach((multiplier, variantIdx) => {
+    orderedMultipliers.forEach((multiplier, variantIdx) => {
       const isBase = Math.abs(multiplier - 1) < 1e-9;
       const multiplierText = formatMultiplier(multiplier);
       const suffix = isBase ? "" : ` ×${multiplierText}`;
