@@ -822,13 +822,33 @@ export function App() {
       setStatus("requesting microphone…");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
+          echoCancellation: { ideal: false, exact: false } as any,
+          noiseSuppression: { ideal: false, exact: false } as any,
+          autoGainControl: { ideal: false, exact: false } as any,
           channelCount: 1,
-        },
+          sampleRate: { ideal: 48000 },
+          // Chrome-specific flags to disable processing
+          googEchoCancellation: false,
+          googNoiseSuppression: false,
+          googAutoGainControl: false,
+          googHighpassFilter: false,
+        } as MediaTrackConstraints,
       });
       mediaStreamRef.current = stream;
+
+      // Log actual audio constraints applied (useful for debugging Chrome mobile)
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        const settings = audioTrack.getSettings();
+        console.info("Audio track settings:", {
+          echoCancellation: settings.echoCancellation,
+          noiseSuppression: settings.noiseSuppression,
+          autoGainControl: settings.autoGainControl,
+          sampleRate: settings.sampleRate,
+          channelCount: settings.channelCount,
+        });
+      }
+
       await decoder.attachStream(stream);
       pipelineDefs.forEach((def) => {
         console.info(`[${def.label}] microphone connected`);
