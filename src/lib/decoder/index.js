@@ -741,9 +741,24 @@ export function createFeskDecoder(overrides = {}) {
     toneLog.clear();
     emitState({ kind: "status", status: "initializing audio…" });
 
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-      latencyHint: "interactive",
-    });
+    const AudioContextCtor =
+      window.AudioContext || window.webkitAudioContext;
+    const desiredSampleRate = 44100;
+    try {
+      audioCtx = new AudioContextCtor({
+        latencyHint: "interactive",
+        sampleRate: desiredSampleRate,
+      });
+    } catch (err) {
+      console.warn(
+        "AudioContext failed to initialize at 44.1 kHz, falling back to default",
+        err,
+      );
+      audioCtx = new AudioContextCtor({ latencyHint: "interactive" });
+    }
+    if (!audioCtx) {
+      throw new Error("AudioContext not available");
+    }
     emitState({ kind: "sample-rate", sampleRate: audioCtx.sampleRate });
 
     const workletModuleUrl = resolveWorkletModuleUrl(config.workletUrl);

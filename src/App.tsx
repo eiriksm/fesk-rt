@@ -19,6 +19,8 @@ import {
 
 import "./App.css";
 
+const TARGET_SAMPLE_RATE = 44100;
+
 const SAMPLE_WAV_CONFIG = [
   { id: "sample1Btn", url: "sample.wav", label: "1" },
   { id: "sample2Btn", url: "sample2.wav", label: "2" },
@@ -284,6 +286,30 @@ function toMonoBuffer(
   return mono;
 }
 
+async function resampleBuffer(
+  buffer: AudioBuffer,
+  targetSampleRate: number,
+): Promise<AudioBuffer> {
+  if (!Number.isFinite(targetSampleRate) || targetSampleRate <= 0) {
+    return buffer;
+  }
+  if (Math.abs(buffer.sampleRate - targetSampleRate) < 1) return buffer;
+  if (typeof OfflineAudioContext === "undefined") return buffer;
+
+  const frameCount = Math.ceil(buffer.duration * targetSampleRate);
+  const offline = new OfflineAudioContext(1, frameCount, targetSampleRate);
+  const source = offline.createBufferSource();
+  source.buffer = buffer;
+  source.connect(offline.destination);
+  source.start(0);
+  try {
+    const resampled = await offline.startRendering();
+    return resampled ?? buffer;
+  } catch {
+    return buffer;
+  }
+}
+
 async function convertBlobToWav(blob: Blob): Promise<Blob> {
   const arrayBuffer = await blob.arrayBuffer();
   const AudioContextCtor =
@@ -297,7 +323,11 @@ async function convertBlobToWav(blob: Blob): Promise<Blob> {
   try {
     const audioBuffer = await decodeAudioDataBuffer(ctx, arrayBuffer);
     const monoBuffer = toMonoBuffer(ctx, audioBuffer);
-    const wavBuffer = audioBufferToWav(monoBuffer);
+    const resampledBuffer = await resampleBuffer(
+      monoBuffer,
+      TARGET_SAMPLE_RATE,
+    );
+    const wavBuffer = audioBufferToWav(resampledBuffer);
     return new Blob([wavBuffer], { type: "audio/wav" });
   } finally {
     try {
@@ -845,6 +875,7 @@ export function App() {
           noiseSuppression: false,
           autoGainControl: false,
           channelCount: 1,
+          sampleRate: { ideal: TARGET_SAMPLE_RATE },
         },
       });
       mediaStreamRef.current = stream;
