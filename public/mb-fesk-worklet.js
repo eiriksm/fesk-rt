@@ -245,7 +245,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
     }
     const block = new Float32Array(length);
     for (let i = 0; i < length; i++) block[i] = this.toneBuffer[start + i];
-    const w = Math.min(Math.floor(0.005 * sampleRate), block.length >> 2);
+    const w = Math.min(Math.floor(0.005 * this.sampleRate), block.length >> 2);
     if (w > 0) {
       for (let i = 0; i < w; i++) {
         const r = 0.5 - 0.5 * Math.cos((Math.PI * i) / (w - 1));

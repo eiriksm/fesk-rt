@@ -743,6 +743,7 @@ export function createFeskDecoder(overrides = {}) {
 
     audioCtx = new (window.AudioContext || window.webkitAudioContext)({
       latencyHint: "interactive",
+      sampleRate: 48000,
     });
     emitState({ kind: "sample-rate", sampleRate: audioCtx.sampleRate });
 
@@ -756,9 +757,19 @@ export function createFeskDecoder(overrides = {}) {
       const workletNode = new AudioWorkletNode(audioCtx, "mb-fesk", {
         numberOfInputs: 1,
         numberOfOutputs: 0,
+        channelCount: 1,
+        channelCountMode: "explicit",
+        channelInterpretation: "speakers",
       });
       const micGainNode = audioCtx.createGain();
       const sampleGainNode = audioCtx.createGain();
+      // Force mono processing for Chrome mobile compatibility
+      micGainNode.channelCount = 1;
+      micGainNode.channelCountMode = "explicit";
+      micGainNode.channelInterpretation = "speakers";
+      sampleGainNode.channelCount = 1;
+      sampleGainNode.channelCountMode = "explicit";
+      sampleGainNode.channelInterpretation = "speakers";
       micGainNode.gain.value = Number.isFinite(def.micGain) && def.micGain > 0 ? def.micGain : 1;
       sampleGainNode.gain.value =
         Number.isFinite(def.sampleGain) && def.sampleGain > 0 ? def.sampleGain : 1;
@@ -806,6 +817,10 @@ export function createFeskDecoder(overrides = {}) {
       } catch {}
     }
     mediaSrc = audioCtx.createMediaStreamSource(stream);
+    // Force mono output for Chrome mobile compatibility
+    mediaSrc.channelCount = 1;
+    mediaSrc.channelCountMode = "explicit";
+    mediaSrc.channelInterpretation = "speakers";
     connectNodeToPipelines(mediaSrc, "mic");
     for (const state of pipelineStates.values()) {
       emitState({
