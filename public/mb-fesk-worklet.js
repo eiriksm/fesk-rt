@@ -21,6 +21,11 @@ class MultiBankFESK extends AudioWorkletProcessor {
     this.toneSamples = 0;
     this.gapSamples = 0;
     this.sampleRate = sampleRate;
+    // Debug: periodic stats
+    this.processCount = 0;
+    this.totalProcessedSamples = 0;
+    this.peakInputSample = 0;
+    this.peakEnergySeen = 0;
     this.port.onmessage = (e) => {
       const {
         freqSets,
@@ -73,6 +78,19 @@ class MultiBankFESK extends AudioWorkletProcessor {
       this.resetToneState();
       this.banks = this._buildBanks(freqSets);
       this.ready = true;
+
+      // Debug: log configuration
+      console.log(
+        `[${this.pipelineKey}] Worklet initialized: sr=${sampleRate}Hz, ` +
+        `energyOn=${this.energyOn.toExponential(2)}, energyOff=${this.energyOff.toExponential(2)}, ` +
+        `minToneSamples=${this.minToneSamples}, minGapSamples=${this.minGapSamples}, ` +
+        `hpAlpha=${this.hpAlpha.toFixed(4)}, banks=${this.banks.length}`
+      );
+      if (this.banks.length > 0 && this.banks[0].digits) {
+        const freqs = this.banks[0].digits.map((d, i) => `${i}:${d.primary?.toFixed(1) || 'N/A'}Hz`).join(', ');
+        console.log(`[${this.pipelineKey}] Target frequencies: ${freqs}`);
+      }
+
       this.port.postMessage({
         t: "ready",
         sr: sampleRate,
@@ -253,6 +271,17 @@ class MultiBankFESK extends AudioWorkletProcessor {
         block[block.length - 1 - i] *= r;
       }
     }
+
+    // Calculate audio characteristics for debugging
+    let blockMin = Infinity, blockMax = -Infinity, blockSum = 0;
+    for (let i = 0; i < block.length; i++) {
+      const val = block[i];
+      if (val < blockMin) blockMin = val;
+      if (val > blockMax) blockMax = val;
+      blockSum += Math.abs(val);
+    }
+    const blockAvg = blockSum / block.length;
+
     const results = [];
     for (let b = 0; b < this.banks.length; b++) {
       const bank = this.banks[b];
@@ -304,12 +333,24 @@ class MultiBankFESK extends AudioWorkletProcessor {
         powers: Array.from(energies),
       });
     }
-    if (results.length)
+
+    // Debug logging for tone detection
+    if (results.length) {
+      const activeResults = results.filter(r => r.active);
+      if (activeResults.length > 0) {
+        console.log(
+          `[${this.pipelineKey}] Tone detected: len=${length} samples (${(length/this.sampleRate*1000).toFixed(1)}ms), ` +
+          `range=[${blockMin.toFixed(4)}, ${blockMax.toFixed(4)}], avg=${blockAvg.toFixed(4)}, ` +
+          `totalEnergy=${activeResults[0]?.powers.reduce((a,b)=>a+b,0).toExponential(2)}, ` +
+          `digit=${activeResults[0]?.idx}, score=${activeResults[0]?.score.toFixed(3)}, freq=${activeResults[0]?.freqHz.toFixed(1)}Hz`
+        );
+      }
       this.port.postMessage({
         t: "candidates",
         pipeline: this.pipelineKey,
         results,
       });
+    }
     this.resetToneState();
   }
 
@@ -317,20 +358,52 @@ class MultiBankFESK extends AudioWorkletProcessor {
     if (!this.ready) return true;
     const x = inputs[0]?.[0];
     if (!x) return true;
+
+    // Debug: track buffer size and input characteristics
+    this.processCount++;
+    this.totalProcessedSamples += x.length;
+
+    // Log stats every 2 seconds
+    if (this.totalProcessedSamples >= this.sampleRate * 2) {
+      console.log(
+        `[${this.pipelineKey}] Stats: processCount=${this.processCount}, bufSize=${x.length}, ` +
+        `peakInput=${this.peakInputSample.toFixed(4)}, peakEnergy=${this.peakEnergySeen.toExponential(2)}, ` +
+        `currentEnergy=${this.energyEnv.toExponential(2)}, toneActive=${this.toneActive}`
+      );
+      this.processCount = 0;
+      this.totalProcessedSamples = 0;
+      this.peakInputSample = 0;
+      this.peakEnergySeen = 0;
+    }
+
     for (let i = 0; i < x.length; i++) {
       const sample = x[i];
+
+      // Track peak input
+      const absSample = Math.abs(sample);
+      if (absSample > this.peakInputSample) {
+        this.peakInputSample = absSample;
+      }
+
       const filtered = sample - this.hpLastX + this.hpAlpha * this.hpLastY;
       this.hpLastX = sample;
       this.hpLastY = filtered;
       const energy = filtered * filtered;
       this.energyEnv =
         this.energyEnv * this.energyDecay + energy * this.energyRise;
+
+      // Track peak energy
+      if (this.energyEnv > this.peakEnergySeen) {
+        this.peakEnergySeen = this.energyEnv;
+      }
+
       if (!this.toneActive) {
         if (this.energyEnv >= this.energyOn) {
           this.toneActive = true;
           this.toneBuffer = [];
           this.toneSamples = 0;
           this.gapSamples = 0;
+          console.log(`[${this.pipelineKey}] Tone START - energy=${this.energyEnv.toExponential(2)}`);
         }
       }
       if (this.toneActive) {
@@ -339,6 +412,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
         if (this.energyEnv <= this.energyOff) {
           this.gapSamples++;
           if (this.gapSamples >= this.minGapSamples) {
+            console.log(`[${this.pipelineKey}] Tone END - samples=${this.toneSamples}, gap=${this.gapSamples}`);
             this.finalizeTone();
           }
         } else {
