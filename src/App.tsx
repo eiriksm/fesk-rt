@@ -296,7 +296,8 @@ async function convertBlobToWav(blob: Blob): Promise<Blob> {
   const ctx = new AudioContextCtor();
   try {
     const audioBuffer = await decodeAudioDataBuffer(ctx, arrayBuffer);
-    const wavBuffer = audioBufferToWav(audioBuffer);
+    const monoBuffer = toMonoBuffer(ctx, audioBuffer);
+    const wavBuffer = audioBufferToWav(monoBuffer);
     return new Blob([wavBuffer], { type: "audio/wav" });
   } finally {
     try {
