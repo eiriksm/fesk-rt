@@ -820,19 +820,25 @@ export function App() {
       await decoder.prepare();
       await decoder.waitForReady();
       setStatus("requesting microphone…");
+      // Chrome mobile often ignores standard constraints, so we include Chrome-specific flags
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: { ideal: false, exact: false } as any,
-          noiseSuppression: { ideal: false, exact: false } as any,
-          autoGainControl: { ideal: false, exact: false } as any,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
           channelCount: 1,
           sampleRate: { ideal: 48000 },
-          // Chrome-specific flags to disable processing
+          // Chrome-specific flags (not in standard MediaTrackConstraints)
           googEchoCancellation: false,
           googNoiseSuppression: false,
           googAutoGainControl: false,
           googHighpassFilter: false,
-        } as MediaTrackConstraints,
+        } as MediaTrackConstraints & {
+          googEchoCancellation?: boolean;
+          googNoiseSuppression?: boolean;
+          googAutoGainControl?: boolean;
+          googHighpassFilter?: boolean;
+        },
       });
       mediaStreamRef.current = stream;
 
