@@ -79,16 +79,20 @@ class MultiBankFESK extends AudioWorkletProcessor {
       this.banks = this._buildBanks(freqSets);
       this.ready = true;
 
-      // Debug: log configuration
-      console.log(
-        `[${this.pipelineKey}] Worklet initialized: sr=${sampleRate}Hz, ` +
+      // Send initialization debug info
+      const initMsg =
+        `Worklet initialized: sr=${sampleRate}Hz, ` +
         `energyOn=${this.energyOn.toExponential(2)}, energyOff=${this.energyOff.toExponential(2)}, ` +
         `minToneSamples=${this.minToneSamples}, minGapSamples=${this.minGapSamples}, ` +
-        `hpAlpha=${this.hpAlpha.toFixed(4)}, banks=${this.banks.length}`
-      );
+        `hpAlpha=${this.hpAlpha.toFixed(4)}, banks=${this.banks.length}`;
+      console.log(`[${this.pipelineKey}] ${initMsg}`);
+      this.port.postMessage({ t: "debug", pipeline: this.pipelineKey, msg: initMsg });
+
       if (this.banks.length > 0 && this.banks[0].digits) {
         const freqs = this.banks[0].digits.map((d, i) => `${i}:${d.primary?.toFixed(1) || 'N/A'}Hz`).join(', ');
-        console.log(`[${this.pipelineKey}] Target frequencies: ${freqs}`);
+        const freqMsg = `Target frequencies: ${freqs}`;
+        console.log(`[${this.pipelineKey}] ${freqMsg}`);
+        this.port.postMessage({ t: "debug", pipeline: this.pipelineKey, msg: freqMsg });
       }
 
       this.port.postMessage({
@@ -338,12 +342,13 @@ class MultiBankFESK extends AudioWorkletProcessor {
     if (results.length) {
       const activeResults = results.filter(r => r.active);
       if (activeResults.length > 0) {
-        console.log(
-          `[${this.pipelineKey}] Tone detected: len=${length} samples (${(length/this.sampleRate*1000).toFixed(1)}ms), ` +
+        const msg =
+          `Tone detected: len=${length} samples (${(length/this.sampleRate*1000).toFixed(1)}ms), ` +
           `range=[${blockMin.toFixed(4)}, ${blockMax.toFixed(4)}], avg=${blockAvg.toFixed(4)}, ` +
           `totalEnergy=${activeResults[0]?.powers.reduce((a,b)=>a+b,0).toExponential(2)}, ` +
-          `digit=${activeResults[0]?.idx}, score=${activeResults[0]?.score.toFixed(3)}, freq=${activeResults[0]?.freqHz.toFixed(1)}Hz`
-        );
+          `digit=${activeResults[0]?.idx}, score=${activeResults[0]?.score.toFixed(3)}, freq=${activeResults[0]?.freqHz.toFixed(1)}Hz`;
+        console.log(`[${this.pipelineKey}] ${msg}`);
+        this.port.postMessage({ t: "debug", pipeline: this.pipelineKey, msg });
       }
       this.port.postMessage({
         t: "candidates",
@@ -365,11 +370,12 @@ class MultiBankFESK extends AudioWorkletProcessor {
 
     // Log stats every 2 seconds
     if (this.totalProcessedSamples >= this.sampleRate * 2) {
-      console.log(
-        `[${this.pipelineKey}] Stats: processCount=${this.processCount}, bufSize=${x.length}, ` +
+      const msg =
+        `Stats: processCount=${this.processCount}, bufSize=${x.length}, ` +
         `peakInput=${this.peakInputSample.toFixed(4)}, peakEnergy=${this.peakEnergySeen.toExponential(2)}, ` +
-        `currentEnergy=${this.energyEnv.toExponential(2)}, toneActive=${this.toneActive}`
-      );
+        `currentEnergy=${this.energyEnv.toExponential(2)}, toneActive=${this.toneActive}`;
+      console.log(`[${this.pipelineKey}] ${msg}`);
+      this.port.postMessage({ t: "debug", pipeline: this.pipelineKey, msg });
       this.processCount = 0;
       this.totalProcessedSamples = 0;
       this.peakInputSample = 0;
@@ -403,7 +409,9 @@ class MultiBankFESK extends AudioWorkletProcessor {
           this.toneBuffer = [];
           this.toneSamples = 0;
           this.gapSamples = 0;
-          console.log(`[${this.pipelineKey}] Tone START - energy=${this.energyEnv.toExponential(2)}`);
+          const msg = `Tone START - energy=${this.energyEnv.toExponential(2)}`;
+          console.log(`[${this.pipelineKey}] ${msg}`);
+          this.port.postMessage({ t: "debug", pipeline: this.pipelineKey, msg });
         }
       }
       if (this.toneActive) {
@@ -412,7 +420,9 @@ class MultiBankFESK extends AudioWorkletProcessor {
         if (this.energyEnv <= this.energyOff) {
           this.gapSamples++;
           if (this.gapSamples >= this.minGapSamples) {
-            console.log(`[${this.pipelineKey}] Tone END - samples=${this.toneSamples}, gap=${this.gapSamples}`);
+            const msg = `Tone END - samples=${this.toneSamples}, gap=${this.gapSamples}`;
+            console.log(`[${this.pipelineKey}] ${msg}`);
+            this.port.postMessage({ t: "debug", pipeline: this.pipelineKey, msg });
             this.finalizeTone();
           }
         } else {

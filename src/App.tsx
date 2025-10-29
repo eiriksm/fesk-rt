@@ -411,11 +411,20 @@ export function App() {
     undefined,
     createInitialCandidateState,
   );
+  const [debugMessages, setDebugMessages] = useState<string[]>([]);
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const autoStopTriggeredRef = useRef(false);
+
+  const addDebugMessage = useCallback((msg: string) => {
+    setDebugMessages((prev) => {
+      const newMessages = [...prev, `${new Date().toISOString().substr(11, 12)} ${msg}`];
+      // Keep last 50 messages
+      return newMessages.slice(-50);
+    });
+  }, []);
 
   const mediaRecorderSupported = typeof MediaRecorder !== "undefined";
 
@@ -723,11 +732,21 @@ export function App() {
         case "buffer-ended":
           handleSamplePlaybackEnded();
           break;
+        case "debug": {
+          const pipelineKey = payload.pipelineKey;
+          const message = payload.message;
+          if (typeof pipelineKey === "string" && typeof message === "string") {
+            const pipelineLabel =
+              pipelineByKey.get(pipelineKey)?.label || pipelineKey;
+            addDebugMessage(`[${pipelineLabel}] ${message}`);
+          }
+          break;
+        }
         default:
           break;
       }
     },
-    [handleSamplePlaybackEnded],
+    [addDebugMessage, handleSamplePlaybackEnded, pipelineByKey],
   );
 
   const handlePreviewEvent = useCallback((payload: DecoderPreviewEvent) => {
@@ -1049,6 +1068,29 @@ export function App() {
           </div>
         </div>
       </div>
+      {debugMode && debugMessages.length > 0 && (
+        <div
+          style={{
+            marginTop: "20px",
+            padding: "10px",
+            backgroundColor: "#f0f0f0",
+            borderRadius: "5px",
+            maxHeight: "300px",
+            overflowY: "auto",
+            fontFamily: "monospace",
+            fontSize: "11px",
+          }}
+        >
+          <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+            Debug Log:
+          </div>
+          {debugMessages.map((msg, idx) => (
+            <div key={idx} style={{ marginBottom: "2px" }}>
+              {msg}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

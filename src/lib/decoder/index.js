@@ -725,6 +725,15 @@ export function createFeskDecoder(overrides = {}) {
     }
     if (message.t === "candidates") {
       handlePipelineCandidates(def, message.results);
+      return;
+    }
+    if (message.t === "debug") {
+      emitState({
+        kind: "debug",
+        pipelineKey: def.key,
+        message: message.msg,
+      });
+      return;
     }
   }
 
