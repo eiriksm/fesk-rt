@@ -458,11 +458,29 @@ export function App() {
 
   const getRecorderMimeType = useCallback(() => {
     if (!mediaRecorderSupported) return null;
-    const preferred = [
-      "audio/webm;codecs=opus",
-      "audio/webm",
-      "audio/ogg;codecs=opus",
-    ];
+    const isFirefox =
+      typeof navigator !== "undefined" && /firefox/i.test(navigator.userAgent);
+    const preferred = isFirefox
+      ? [
+          // Firefox can report support for WebM but fail to decode it when we
+          // later convert the recording to WAV via AudioContext. Prefer Ogg
+          // when available so that Firefox produces data it can round-trip
+          // itself.
+          "audio/ogg;codecs=opus",
+          "audio/ogg",
+          "audio/webm;codecs=opus",
+          "audio/webm",
+        ]
+      : [
+          // Chrome (particularly on mobile) can report Ogg support but fail to
+          // produce playable data. Prefer WebM first so Chrome selects a format
+          // it can reliably encode, while still leaving the Ogg fallback for
+          // Firefox and other browsers that truly support it.
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/ogg;codecs=opus",
+          "audio/ogg",
+        ];
     for (const type of preferred) {
       if (MediaRecorder.isTypeSupported?.(type)) return type;
     }
