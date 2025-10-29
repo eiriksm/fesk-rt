@@ -71,6 +71,20 @@ button:disabled {
   display: none;
 }
 
+.controls .webhook-input {
+  flex: 2 1 260px;
+  min-width: 220px;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ccc;
+  font: inherit;
+  border-radius: 0;
+}
+
+.controls .send-test {
+  flex: 1 1 180px;
+  min-width: 140px;
+}
+
 details.debug-panel {
   margin-top: 1.5rem;
 }
