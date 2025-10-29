@@ -197,6 +197,7 @@ function decodeCodes(codes) {
     [38, ":"],
     [39, "'"],
     [40, '"'],
+    [41, "\n"],
   ].forEach(([code, ch]) => {
     CODE_MAP[code] = ch;
   });
