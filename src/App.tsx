@@ -415,6 +415,7 @@ export function App() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const failedRecorderTypesRef = useRef<Set<string>>(new Set());
   const autoStopTriggeredRef = useRef(false);
 
   const mediaRecorderSupported = typeof MediaRecorder !== "undefined";
@@ -458,33 +459,26 @@ export function App() {
 
   const getRecorderMimeType = useCallback(() => {
     if (!mediaRecorderSupported) return null;
-    const isFirefox =
-      typeof navigator !== "undefined" && /firefox/i.test(navigator.userAgent);
-    const preferred = isFirefox
-      ? [
-          // Firefox can report support for WebM but fail to decode it when we
-          // later convert the recording to WAV via AudioContext. Prefer Ogg
-          // when available so that Firefox produces data it can round-trip
-          // itself.
-          "audio/ogg;codecs=opus",
-          "audio/ogg",
-          "audio/webm;codecs=opus",
-          "audio/webm",
-        ]
-      : [
-          // Chrome (particularly on mobile) can report Ogg support but fail to
-          // produce playable data. Prefer WebM first so Chrome selects a format
-          // it can reliably encode, while still leaving the Ogg fallback for
-          // Firefox and other browsers that truly support it.
-          "audio/webm;codecs=opus",
-          "audio/webm",
-          "audio/ogg;codecs=opus",
-          "audio/ogg",
-        ];
+    const failedTypes = failedRecorderTypesRef.current;
+    const preferred = [
+      // Prefer WebM first so Chromium-based browsers stick with the format
+      // they reliably support, but fall back to Ogg when WebM cannot be
+      // converted (e.g. Firefox decoding issues).
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/ogg",
+    ];
+    let fallback: string | null = null;
     for (const type of preferred) {
-      if (MediaRecorder.isTypeSupported?.(type)) return type;
+      if (!MediaRecorder.isTypeSupported?.(type)) continue;
+      if (failedTypes.has(type)) {
+        if (!fallback) fallback = type;
+        continue;
+      }
+      return type;
     }
-    return null;
+    return fallback;
   }, [mediaRecorderSupported]);
 
   const setupRecorder = useCallback(
@@ -516,7 +510,7 @@ export function App() {
   );
 
   const prepareDownload = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, mimeType: string | null) => {
       if (!blob || blob.size === 0) {
         clearRecording();
         return;
@@ -527,8 +521,13 @@ export function App() {
         setRecordedWavBlob(wavBlob);
       } catch (err) {
         console.error("Unable to convert recording", err);
+        if (mimeType) {
+          failedRecorderTypesRef.current.add(mimeType);
+        }
         clearRecording();
-        setStatus("error preparing WAV");
+        setStatus(
+          "error preparing WAV — switched recording format, please try again",
+        );
       } finally {
         setDownloadPreparing(false);
       }
@@ -563,10 +562,11 @@ export function App() {
             let hadError = false;
             try {
               if (finalize && recordedChunksRef.current.length) {
+                const mimeType = recorder.mimeType || "audio/webm";
                 const blob = new Blob(recordedChunksRef.current, {
-                  type: recorder.mimeType || "audio/webm",
+                  type: mimeType,
                 });
-                await prepareDownload(blob);
+                await prepareDownload(blob, mimeType);
               } else if (finalize) {
                 clearRecording();
               } else {
