@@ -70,8 +70,9 @@ class MultiBankFESK extends AudioWorkletProcessor {
       const envSamples = Math.max(1, (envMs * sampleRate) / 1000);
       this.energyDecay = Math.exp(-1 / envSamples);
       this.energyRise = 1 - this.energyDecay;
-      // Faster decay for gap detection (helps Chrome mobile)
-      this.energyFastDecay = Math.exp(-1 / (envSamples * 0.5));
+      // Much faster decay for gap detection (Chrome mobile fix)
+      // Use 1/4 time constant = 4x faster decay
+      this.energyFastDecay = Math.exp(-1 / (envSamples * 0.25));
       this.energyEnv = 0;
       const hpHz = Number.isFinite(hpCutoffHz) ? hpCutoffHz : 600;
       this.hpAlpha = Math.exp((-2 * Math.PI * hpHz) / sampleRate);
