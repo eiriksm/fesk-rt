@@ -79,17 +79,29 @@ describe("decoder internals", () => {
   });
 
   it("converts bit streams into codes and decoded text", () => {
-    const codes = [0, 1, 2, 26, 35];
+    const codes = [0, 1, 2, 41, 26, 35];
     const bits = codesToBits(codes);
 
     const parsedCodes = bitsToCodes(bits);
     expect(parsedCodes).toEqual(codes);
 
     const decoded = decodeCodes(parsedCodes);
-    expect(decoded).toEqual({ ok: true, text: "abc09" });
+    const expectedText = `abc
+09`;
+    expect(decoded).toEqual({ ok: true, text: expectedText });
 
     // CRC-8 ATM checksum over the code stream remains stable.
-    expect(crc8ATM(parsedCodes)).toBe(27);
+    expect(crc8ATM(parsedCodes)).toBe(110);
+  });
+
+  it("decodes newline codes into literal line breaks", () => {
+    const decoded = decodeCodes([0, 41, 1]);
+
+    expect(decoded.ok).toBe(true);
+    expect(decoded.text).toMatchInlineSnapshot(`
+      "a
+      b"
+    `);
   });
 
   it("builds pipeline thresholds with per-bank overrides", () => {
