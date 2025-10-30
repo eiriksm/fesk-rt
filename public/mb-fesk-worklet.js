@@ -430,8 +430,10 @@ class MultiBankFESK extends AudioWorkletProcessor {
         // Calculate energy derivative (rate of change)
         const energyDrop = this.prevEnergyEnv - this.energyEnv;
         const isDropping = energyDrop > 0;
-        // If energy is dropping rapidly (>20% of prev value), consider it a gap
-        const isRapidDrop = isDropping && energyDrop > (this.prevEnergyEnv * 0.2);
+        // Use more sensitive threshold for high energy (helps with 20x gain pipelines)
+        // 5% drop is enough to detect gaps even with very high background energy
+        const dropThreshold = this.prevEnergyEnv * 0.05;
+        const isRapidDrop = isDropping && energyDrop > dropThreshold;
 
         // Gap detected if: below threshold OR dropping rapidly
         const inGap = this.energyEnv <= this.energyOff || (this.toneSamples > this.minToneSamples && isRapidDrop);
