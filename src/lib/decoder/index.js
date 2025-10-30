@@ -268,6 +268,7 @@ export function createFeskDecoder(overrides = {}) {
   const toneLog = new Map();
   let audioCtx = null;
   let mediaSrc = null;
+  let mediaSrcNodes = [];
   let bufferSrc = null;
   let suppressReadyStatus = false;
 
@@ -771,9 +772,21 @@ export function createFeskDecoder(overrides = {}) {
       const workletNode = new AudioWorkletNode(audioCtx, "mb-fesk", {
         numberOfInputs: 1,
         numberOfOutputs: 0,
+        channelCount: 1,
+        channelCountMode: "explicit",
+        channelInterpretation: "discrete",
       });
+      workletNode.channelCount = 1;
+      workletNode.channelCountMode = "explicit";
+      workletNode.channelInterpretation = "discrete";
       const micGainNode = audioCtx.createGain();
       const sampleGainNode = audioCtx.createGain();
+      micGainNode.channelCount = 1;
+      micGainNode.channelCountMode = "explicit";
+      micGainNode.channelInterpretation = "discrete";
+      sampleGainNode.channelCount = 1;
+      sampleGainNode.channelCountMode = "explicit";
+      sampleGainNode.channelInterpretation = "discrete";
       micGainNode.gain.value = Number.isFinite(def.micGain) && def.micGain > 0 ? def.micGain : 1;
       sampleGainNode.gain.value =
         Number.isFinite(def.sampleGain) && def.sampleGain > 0 ? def.sampleGain : 1;
@@ -816,12 +829,65 @@ export function createFeskDecoder(overrides = {}) {
     }
     if (mediaSrc) {
       disconnectNodeFromPipelines(mediaSrc, "mic");
-      try {
-        mediaSrc.disconnect();
-      } catch {}
+      for (const node of mediaSrcNodes) {
+        try {
+          node.disconnect();
+        } catch {}
+      }
+      mediaSrc = null;
+      mediaSrcNodes = [];
     }
-    mediaSrc = audioCtx.createMediaStreamSource(stream);
-    connectNodeToPipelines(mediaSrc, "mic");
+    const track = stream?.getAudioTracks?.()[0] || null;
+    const trackSettings = track?.getSettings ? track.getSettings() : null;
+    const declaredChannels = Number.isFinite(trackSettings?.channelCount)
+      ? trackSettings.channelCount
+      : null;
+    const sourceNode = audioCtx.createMediaStreamSource(stream);
+    const sourceChannels = Number.isFinite(sourceNode.channelCount)
+      ? sourceNode.channelCount
+      : null;
+    const channelCount = Math.max(
+      1,
+      Number.isFinite(declaredChannels) && declaredChannels > 0
+        ? declaredChannels
+        : Number.isFinite(sourceChannels) && sourceChannels > 0
+          ? sourceChannels
+          : 1,
+    );
+    const downmixChannels = channelCount > 1 ? channelCount : 0;
+    const nodes = [sourceNode];
+    let finalNode = sourceNode;
+    if (downmixChannels > 1) {
+      const splitter = audioCtx.createChannelSplitter(downmixChannels);
+      splitter.channelCount = downmixChannels;
+      splitter.channelCountMode = "explicit";
+      splitter.channelInterpretation = "discrete";
+      const merger = audioCtx.createChannelMerger(1);
+      merger.channelCount = 1;
+      merger.channelCountMode = "explicit";
+      merger.channelInterpretation = "discrete";
+      sourceNode.connect(splitter);
+      nodes.push(splitter, merger);
+      for (let i = 0; i < downmixChannels; i += 1) {
+        const gain = audioCtx.createGain();
+        gain.channelCount = 1;
+        gain.channelCountMode = "explicit";
+        gain.channelInterpretation = "discrete";
+        gain.gain.value = 1 / downmixChannels;
+        splitter.connect(gain, i);
+        gain.connect(merger, 0, 0);
+        nodes.push(gain);
+      }
+      finalNode = merger;
+      console.info(
+        `Microphone channelCount ${channelCount} — averaging to mono for decoder`,
+      );
+    } else {
+      console.info(`Microphone channelCount ${channelCount} — using direct mono feed`);
+    }
+    mediaSrc = finalNode;
+    mediaSrcNodes = nodes;
+    connectNodeToPipelines(finalNode, "mic");
     for (const state of pipelineStates.values()) {
       emitState({
         kind: "pipeline-status",
@@ -891,10 +957,13 @@ export function createFeskDecoder(overrides = {}) {
 
     if (mediaSrc) {
       disconnectNodeFromPipelines(mediaSrc, "mic");
-      try {
-        mediaSrc.disconnect();
-      } catch {}
+      for (const node of mediaSrcNodes) {
+        try {
+          node.disconnect();
+        } catch {}
+      }
       mediaSrc = null;
+      mediaSrcNodes = [];
     }
 
     for (const state of pipelineStates.values()) {
