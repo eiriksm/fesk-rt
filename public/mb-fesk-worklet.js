@@ -26,8 +26,6 @@ class MultiBankFESK extends AudioWorkletProcessor {
     this.totalProcessedSamples = 0;
     this.peakInputSample = 0;
     this.peakEnergySeen = 0;
-    // Track energy for derivative-based gap detection
-    this.prevEnergyEnv = 0;
     this.port.onmessage = (e) => {
       const {
         freqSets,
@@ -426,19 +424,9 @@ class MultiBankFESK extends AudioWorkletProcessor {
         this.toneBuffer.push(filtered);
         this.toneSamples++;
 
-        // Chrome mobile fix: Detect gaps by energy drop rate, not just absolute threshold
-        // Calculate energy derivative (rate of change)
-        const energyDrop = this.prevEnergyEnv - this.energyEnv;
-        const isDropping = energyDrop > 0;
-        // Use more sensitive threshold for high energy (helps with 20x gain pipelines)
-        // 5% drop is enough to detect gaps even with very high background energy
-        const dropThreshold = this.prevEnergyEnv * 0.05;
-        const isRapidDrop = isDropping && energyDrop > dropThreshold;
-
-        // Gap detected if: below threshold OR dropping rapidly
-        const inGap = this.energyEnv <= this.energyOff || (this.toneSamples > this.minToneSamples && isRapidDrop);
-
-        if (inGap) {
+        // Chrome mobile fix: Use gain-scaled energy thresholds
+        // Gap detected when energy drops below the scaled energyOff threshold
+        if (this.energyEnv <= this.energyOff) {
           this.gapSamples++;
           if (this.gapSamples >= this.minGapSamples) {
             const msg = `Tone END - samples=${this.toneSamples}, gap=${this.gapSamples}`;
@@ -450,9 +438,6 @@ class MultiBankFESK extends AudioWorkletProcessor {
           this.gapSamples = 0;
         }
       }
-
-      // Save for next sample's derivative calculation
-      this.prevEnergyEnv = this.energyEnv;
     }
     return true;
   }

@@ -794,12 +794,18 @@ export function createFeskDecoder(overrides = {}) {
       pipelineStates.set(def.key, state);
       decoderStates.set(def.key, mkDec(def.key, def.label));
       workletNode.port.onmessage = (e) => handleWorkletMessage(state, e.data);
+
+      // Chrome mobile fix: Scale energy thresholds by gain squared
+      // Energy scales with amplitude squared, so 10x gain = 100x energy, 20x gain = 400x energy
+      const gainFactor = def.micGain;
+      const energyScale = gainFactor * gainFactor;
+
       workletNode.port.postMessage({
         pipelineKey: def.key,
         freqSets: [config.detectorConfig[def.baseBankIndex]],
-        energyFloor: config.energy.floor,
-        energyOn: config.energy.on,
-        energyOff: config.energy.off,
+        energyFloor: config.energy.floor * energyScale,
+        energyOn: config.energy.on * energyScale,
+        energyOff: config.energy.off * energyScale,
         minToneMs: config.energy.minToneMs,
         minGapMs: config.energy.minGapMs,
         ignoreHeadMs: config.energy.ignoreHeadMs,
