@@ -845,8 +845,8 @@ export function App() {
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
-          channelCount: 1,
-          sampleRate: { ideal: 48000 },
+          channelCount: { exact: 1 },
+          sampleRate: { exact: 48000 },
           // Chrome-specific flags (not in standard MediaTrackConstraints)
           googEchoCancellation: false,
           googNoiseSuppression: false,
