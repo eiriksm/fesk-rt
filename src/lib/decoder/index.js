@@ -795,10 +795,12 @@ export function createFeskDecoder(overrides = {}) {
       decoderStates.set(def.key, mkDec(def.key, def.label));
       workletNode.port.onmessage = (e) => handleWorkletMessage(state, e.data);
 
-      // Chrome mobile fix: Scale energy thresholds by gain squared
-      // Energy scales with amplitude squared, so 10x gain = 100x energy, 20x gain = 400x energy
+      // Chrome mobile fix: Scale energy thresholds linearly with gain
+      // Use linear scaling rather than gain^2 to avoid over-scaling
+      // This raises the threshold enough for Chrome's noisy gaps while keeping it
+      // below Firefox's weaker tone energies
       const gainFactor = def.micGain;
-      const energyScale = gainFactor * gainFactor;
+      const energyScale = gainFactor;
 
       workletNode.port.postMessage({
         pipelineKey: def.key,
