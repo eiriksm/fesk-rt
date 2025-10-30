@@ -10,7 +10,7 @@
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
     "start": "vite preview --host 0.0.0.0 --port 4173",
-    "prettier-check": "prettier --check \"src/**/*.{ts,tsx}\" cypress/**/*.js",
+    "prettier-check": "prettier --check --loglevel debug \"src/**/*.{ts,tsx}\" cypress/**/*.js",
     "lint": "eslint . --max-warnings=0",
     "unit": "vitest run"
   },
