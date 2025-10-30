@@ -727,14 +727,6 @@ export function createFeskDecoder(overrides = {}) {
       handlePipelineCandidates(def, message.results);
       return;
     }
-    if (message.t === "debug") {
-      emitState({
-        kind: "debug",
-        pipelineKey: def.key,
-        message: message.msg,
-      });
-      return;
-    }
   }
 
   function resolveWorkletModuleUrl(baseUrl) {
