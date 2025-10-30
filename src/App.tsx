@@ -865,13 +865,15 @@ export function App() {
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
         const settings = audioTrack.getSettings();
-        console.info("Audio track settings:", {
+        const settingsInfo = {
           echoCancellation: settings.echoCancellation,
           noiseSuppression: settings.noiseSuppression,
           autoGainControl: settings.autoGainControl,
           sampleRate: settings.sampleRate,
           channelCount: settings.channelCount,
-        });
+        };
+        console.info("Audio track settings:", settingsInfo);
+        addDebugMessage(`Audio: AGC=${settingsInfo.autoGainControl}, NS=${settingsInfo.noiseSuppression}, EC=${settingsInfo.echoCancellation}, SR=${settingsInfo.sampleRate}Hz, CH=${settingsInfo.channelCount}`);
       }
 
       await decoder.attachStream(stream);

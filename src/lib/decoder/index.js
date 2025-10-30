@@ -794,20 +794,12 @@ export function createFeskDecoder(overrides = {}) {
       pipelineStates.set(def.key, state);
       decoderStates.set(def.key, mkDec(def.key, def.label));
       workletNode.port.onmessage = (e) => handleWorkletMessage(state, e.data);
-
-      // Chrome mobile fix: Scale energy thresholds linearly with gain
-      // Use linear scaling rather than gain^2 to avoid over-scaling
-      // This raises the threshold enough for Chrome's noisy gaps while keeping it
-      // below Firefox's weaker tone energies
-      const gainFactor = def.micGain;
-      const energyScale = gainFactor;
-
       workletNode.port.postMessage({
         pipelineKey: def.key,
         freqSets: [config.detectorConfig[def.baseBankIndex]],
-        energyFloor: config.energy.floor * energyScale,
-        energyOn: config.energy.on * energyScale,
-        energyOff: config.energy.off * energyScale,
+        energyFloor: config.energy.floor,
+        energyOn: config.energy.on,
+        energyOff: config.energy.off,
         minToneMs: config.energy.minToneMs,
         minGapMs: config.energy.minGapMs,
         ignoreHeadMs: config.energy.ignoreHeadMs,
