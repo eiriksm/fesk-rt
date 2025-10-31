@@ -828,7 +828,6 @@ export function App() {
           autoGainControl: false,
           channelCount: { exact: 1 },
           sampleRate: { exact: 48000 },
-          latency: { ideal: 0.01 }, // 10ms latency for real-time FSK decoding
           // Chrome-specific flags (not in standard MediaTrackConstraints)
           googEchoCancellation: false,
           googNoiseSuppression: false,
@@ -846,16 +845,13 @@ export function App() {
       // Log actual audio constraints applied
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
-        const settings = audioTrack.getSettings() as MediaTrackSettings & {
-          latency?: number;
-        };
+        const settings = audioTrack.getSettings();
         console.info("Audio track settings:", {
           echoCancellation: settings.echoCancellation,
           noiseSuppression: settings.noiseSuppression,
           autoGainControl: settings.autoGainControl,
           sampleRate: settings.sampleRate,
           channelCount: settings.channelCount,
-          latency: settings.latency,
         });
       }
 
