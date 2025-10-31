@@ -29,8 +29,7 @@ const DEFAULT_ENERGY = {
 const DEFAULT_GAIN_CONFIG = {
   micBase: 1,
   sampleBase: 1,
-  boostMultiplier: 10,
-  extraMultiplier: 20,
+  gainMultipliers: [1, 2, 4, 8, 16],
 };
 
 const DEFAULT_SCORE_MIN = 0.2;
@@ -94,39 +93,25 @@ function buildPipelineDefs(freqSets, options = {}) {
     bankLabelOverrides = DEFAULT_BANK_LABEL_OVERRIDES,
     micBase = DEFAULT_GAIN_CONFIG.micBase,
     sampleBase = DEFAULT_GAIN_CONFIG.sampleBase,
-    boostMultiplier = DEFAULT_GAIN_CONFIG.boostMultiplier,
-    extraMultiplier = DEFAULT_GAIN_CONFIG.extraMultiplier,
+    gainMultipliers = DEFAULT_GAIN_CONFIG.gainMultipliers,
   } = options;
 
   const defs = [];
   freqSets.forEach((_, idx) => {
     const baseLabel = bankLabel(idx, bankLabelOverrides);
-    defs.push(
-      {
-        key: `bank-${idx}`,
+    gainMultipliers.forEach((multiplier, gainIdx) => {
+      const isBase = multiplier === 1;
+      const gainLabel = isBase ? "" : ` ×${multiplier}`;
+      const shortGainLabel = isBase ? "" : `×${multiplier}`;
+      defs.push({
+        key: `bank-${idx}-gain${gainIdx}`,
         baseBankIndex: idx,
-        label: `Bank ${baseLabel}`,
-        shortLabel: `${baseLabel}`,
-        micGain: micBase,
-        sampleGain: sampleBase,
-      },
-      {
-        key: `bank-${idx}-boost`,
-        baseBankIndex: idx,
-        label: `Bank ${baseLabel} boost`,
-        shortLabel: `${baseLabel}+`,
-        micGain: micBase * boostMultiplier,
-        sampleGain: sampleBase * boostMultiplier,
-      },
-      {
-        key: `bank-${idx}-extra`,
-        baseBankIndex: idx,
-        label: `Bank ${baseLabel} extra boost`,
-        shortLabel: `${baseLabel}++`,
-        micGain: micBase * extraMultiplier,
-        sampleGain: sampleBase * extraMultiplier,
-      },
-    );
+        label: `Bank ${baseLabel}${gainLabel}`,
+        shortLabel: `${baseLabel}${shortGainLabel}`,
+        micGain: micBase * multiplier,
+        sampleGain: sampleBase * multiplier,
+      });
+    });
   });
   return defs;
 }
