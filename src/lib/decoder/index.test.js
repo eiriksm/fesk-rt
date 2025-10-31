@@ -52,30 +52,42 @@ describe("decoder internals", () => {
     expect(config.scoreMin).toBeCloseTo(0.2, 5);
     expect(config.scoreMinBank).toEqual([0.28, 0.18]);
 
-    const base = config.pipelineDefs.find((def) => def.key === "bank-0");
-    const boost = config.pipelineDefs.find((def) => def.key === "bank-0-boost");
-    const extra = config.pipelineDefs.find((def) => def.key === "bank-0-extra");
+    const gain0 = config.pipelineDefs.find((def) => def.key === "bank-0-gain0");
+    const gain1 = config.pipelineDefs.find((def) => def.key === "bank-0-gain1");
+    const gain2 = config.pipelineDefs.find((def) => def.key === "bank-0-gain2");
+    const gain3 = config.pipelineDefs.find((def) => def.key === "bank-0-gain3");
+    const gain4 = config.pipelineDefs.find((def) => def.key === "bank-0-gain4");
 
-    expect(base).toMatchObject({
+    expect(gain0).toMatchObject({
       label: "Bank A",
       micGain: 1,
       sampleGain: 1,
     });
-    expect(boost).toMatchObject({
-      label: "Bank A boost",
-      micGain: 10,
-      sampleGain: 10,
+    expect(gain1).toMatchObject({
+      label: "Bank A ×2",
+      micGain: 2,
+      sampleGain: 2,
     });
-    expect(extra).toMatchObject({
-      label: "Bank A extra boost",
-      micGain: 20,
-      sampleGain: 20,
+    expect(gain2).toMatchObject({
+      label: "Bank A ×4",
+      micGain: 4,
+      sampleGain: 4,
+    });
+    expect(gain3).toMatchObject({
+      label: "Bank A ×8",
+      micGain: 8,
+      sampleGain: 8,
+    });
+    expect(gain4).toMatchObject({
+      label: "Bank A ×16",
+      micGain: 16,
+      sampleGain: 16,
     });
 
     const thresholds = config.pipelineThresholds;
-    expect(thresholds.get("bank-0")).toBeCloseTo(0.28, 5);
-    expect(thresholds.get("bank-1")).toBeCloseTo(0.18, 5);
-    expect(thresholds.get("bank-1-extra")).toBeCloseTo(0.18, 5);
+    expect(thresholds.get("bank-0-gain0")).toBeCloseTo(0.28, 5);
+    expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.18, 5);
+    expect(thresholds.get("bank-1-gain4")).toBeCloseTo(0.18, 5);
   });
 
   it("converts bit streams into codes and decoded text", () => {
@@ -112,30 +124,29 @@ describe("decoder internals", () => {
     const defs = buildPipelineDefs(freqSets, {
       micBase: 2,
       sampleBase: 3,
-      boostMultiplier: 4,
-      extraMultiplier: 5,
+      gainMultipliers: [1, 4, 5],
     });
 
     expect(defs).toHaveLength(6);
     expect(defs[0]).toMatchObject({
-      key: "bank-0",
+      key: "bank-0-gain0",
       micGain: 2,
       sampleGain: 3,
     });
     expect(defs[1]).toMatchObject({
-      key: "bank-0-boost",
+      key: "bank-0-gain1",
       micGain: 8,
       sampleGain: 12,
     });
     expect(defs[2]).toMatchObject({
-      key: "bank-0-extra",
+      key: "bank-0-gain2",
       micGain: 10,
       sampleGain: 15,
     });
 
     const thresholds = buildPipelineThresholds(defs, [0.9], 0.25);
-    expect(thresholds.get("bank-0")).toBeCloseTo(0.9, 5);
-    expect(thresholds.get("bank-0-boost")).toBeCloseTo(0.9, 5);
-    expect(thresholds.get("bank-1")).toBeCloseTo(0.25, 5);
+    expect(thresholds.get("bank-0-gain0")).toBeCloseTo(0.9, 5);
+    expect(thresholds.get("bank-0-gain1")).toBeCloseTo(0.9, 5);
+    expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.25, 5);
   });
 });
