@@ -65,9 +65,6 @@ class MultiBankFESK extends AudioWorkletProcessor {
       const envSamples = Math.max(1, (envMs * sampleRate) / 1000);
       this.energyDecay = Math.exp(-1 / envSamples);
       this.energyRise = 1 - this.energyDecay;
-      // Much faster decay for gap detection (Chrome mobile fix)
-      // Use 1/4 time constant = 4x faster decay
-      this.energyFastDecay = Math.exp(-1 / (envSamples * 0.25));
       this.energyEnv = 0;
       const hpHz = Number.isFinite(hpCutoffHz) ? hpCutoffHz : 600;
       this.hpAlpha = Math.exp((-2 * Math.PI * hpHz) / sampleRate);
@@ -333,10 +330,8 @@ class MultiBankFESK extends AudioWorkletProcessor {
       this.hpLastY = filtered;
       const energy = filtered * filtered;
 
-      // Use faster decay when in tone and energy dropping (Chrome mobile fix)
-      const decay = (this.toneActive && energy < this.energyEnv) ? this.energyFastDecay : this.energyDecay;
-      const rise = 1 - decay;
-      this.energyEnv = this.energyEnv * decay + energy * rise;
+      // Update energy envelope with exponential smoothing
+      this.energyEnv = this.energyEnv * this.energyDecay + energy * this.energyRise;
 
       if (!this.toneActive) {
         if (this.energyEnv >= this.energyOn) {
