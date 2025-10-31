@@ -450,6 +450,31 @@ export function App() {
         finalResult.pipelineKey
       : "";
 
+  const pipelineRealTimeEntries = useMemo(
+    () =>
+      pipelineDefs.map((def) => {
+        const candidate = candidateState.candidates.get(def.key);
+        const text =
+          typeof candidate?.text === "string" ? candidate.text : "";
+        const hasText = text.length > 0;
+        const isProvisional = candidate
+          ? candidate.provisional || !candidate.crcOk
+          : false;
+        const classNames = ["out-row-text"];
+        if (hasText) {
+          classNames.push(isProvisional ? "provisional" : "decoded-ok");
+        }
+        return {
+          key: def.key,
+          label: def.label,
+          text,
+          hasText,
+          className: classNames.join(" "),
+        };
+      }),
+    [candidateState, pipelineDefs],
+  );
+
   const clearRecording = useCallback(() => {
     setRecordedWavBlob(null);
     setDownloadPreparing(false);
@@ -1011,6 +1036,19 @@ export function App() {
               {previewLabel}
             </div>
             <div className={previewClassNames.join(" ")}>{previewText}</div>
+          </div>
+        </div>
+        <div className="out-row pipeline-row">
+          <div className="out-row-header">Per-pipeline real time</div>
+          <div className="pipeline-grid">
+            {pipelineRealTimeEntries.map((entry) => (
+              <div key={entry.key} className="pipeline-item">
+                <div className="pipeline-label">{entry.label}</div>
+                <div className={entry.className}>
+                  {entry.hasText ? entry.text : "—"}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
         <div className="out-row result-row">

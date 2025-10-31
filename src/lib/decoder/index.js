@@ -26,11 +26,22 @@ const DEFAULT_ENERGY = {
   hpCutoffHz: 600,
 };
 
+const FINE_GAIN_MULTIPLIERS = Array.from({ length: 21 }, (_, idx) =>
+  Number((idx * 0.1).toFixed(1)),
+);
+
+const COARSE_GAIN_MULTIPLIERS = Array.from({ length: 11 }, (_, idx) =>
+  (idx === 0 ? 1 : idx * 2),
+);
+
+const DEFAULT_GAIN_MULTIPLIERS = Array.from(
+  new Set([...FINE_GAIN_MULTIPLIERS, ...COARSE_GAIN_MULTIPLIERS]),
+);
+
 const DEFAULT_GAIN_CONFIG = {
   micBase: 1,
   sampleBase: 1,
-  boostMultiplier: 10,
-  extraMultiplier: 20,
+  gainMultipliers: DEFAULT_GAIN_MULTIPLIERS,
 };
 
 const DEFAULT_SCORE_MIN = 0.2;
@@ -89,44 +100,82 @@ function buildDetectorConfig(freqSets) {
   });
 }
 
+function formatMultiplier(multiplier) {
+  if (Number.isInteger(multiplier)) return String(multiplier);
+  return String(multiplier.toFixed(2)).replace(/\.00?$/, "").replace(/0+$/, "");
+}
+
+function formatMultiplierForKey(multiplier) {
+  return formatMultiplier(multiplier).replace(/[^0-9a-z]+/gi, "-");
+}
+
 function buildPipelineDefs(freqSets, options = {}) {
   const {
     bankLabelOverrides = DEFAULT_BANK_LABEL_OVERRIDES,
     micBase = DEFAULT_GAIN_CONFIG.micBase,
     sampleBase = DEFAULT_GAIN_CONFIG.sampleBase,
-    boostMultiplier = DEFAULT_GAIN_CONFIG.boostMultiplier,
-    extraMultiplier = DEFAULT_GAIN_CONFIG.extraMultiplier,
+    gainMultipliers,
+    boostMultiplier,
+    extraMultiplier,
   } = options;
+
+  let multipliers = Array.isArray(gainMultipliers)
+    ? gainMultipliers
+    : undefined;
+
+  if (!multipliers) {
+    const legacyMultipliers = [1];
+    if (Number.isFinite(boostMultiplier)) legacyMultipliers.push(boostMultiplier);
+    if (Number.isFinite(extraMultiplier)) legacyMultipliers.push(extraMultiplier);
+    multipliers =
+      legacyMultipliers.length > 1
+        ? legacyMultipliers
+        : DEFAULT_GAIN_CONFIG.gainMultipliers;
+  }
+
+  const normalizedMultipliers = Array.from(new Set(multipliers))
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value >= 0)
+    .sort((a, b) => a - b);
+
+  if (!normalizedMultipliers.some((value) => Math.abs(value - 1) < 1e-9)) {
+    normalizedMultipliers.push(1);
+    normalizedMultipliers.sort((a, b) => a - b);
+  }
+
+  const baseMultiplier = normalizedMultipliers.find(
+    (value) => Math.abs(value - 1) < 1e-9,
+  );
+
+  const orderedMultipliers = baseMultiplier
+    ? [
+        baseMultiplier,
+        ...normalizedMultipliers.filter((value) => value < baseMultiplier),
+        ...normalizedMultipliers.filter((value) => value > baseMultiplier),
+      ]
+    : normalizedMultipliers;
 
   const defs = [];
   freqSets.forEach((_, idx) => {
     const baseLabel = bankLabel(idx, bankLabelOverrides);
-    defs.push(
-      {
-        key: `bank-${idx}`,
+    orderedMultipliers.forEach((multiplier, variantIdx) => {
+      const isBase = Math.abs(multiplier - 1) < 1e-9;
+      const multiplierText = formatMultiplier(multiplier);
+      const suffix = isBase ? "" : ` ×${multiplierText}`;
+      const shortSuffix = isBase ? "" : `×${multiplierText}`;
+      const keySuffix = isBase
+        ? ""
+        : `-x${formatMultiplierForKey(multiplier) || variantIdx + 1}`;
+
+      defs.push({
+        key: `bank-${idx}${keySuffix}`,
         baseBankIndex: idx,
-        label: `Bank ${baseLabel}`,
-        shortLabel: `${baseLabel}`,
-        micGain: micBase,
-        sampleGain: sampleBase,
-      },
-      {
-        key: `bank-${idx}-boost`,
-        baseBankIndex: idx,
-        label: `Bank ${baseLabel} boost`,
-        shortLabel: `${baseLabel}+`,
-        micGain: micBase * boostMultiplier,
-        sampleGain: sampleBase * boostMultiplier,
-      },
-      {
-        key: `bank-${idx}-extra`,
-        baseBankIndex: idx,
-        label: `Bank ${baseLabel} extra boost`,
-        shortLabel: `${baseLabel}++`,
-        micGain: micBase * extraMultiplier,
-        sampleGain: sampleBase * extraMultiplier,
-      },
-    );
+        label: `Bank ${baseLabel}${suffix}`,
+        shortLabel: `${baseLabel}${shortSuffix}`,
+        micGain: micBase * multiplier,
+        sampleGain: sampleBase * multiplier,
+      });
+    });
   });
   return defs;
 }
