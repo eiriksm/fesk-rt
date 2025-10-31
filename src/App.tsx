@@ -1049,6 +1049,13 @@ export function App() {
           </div>
         </div>
       </div>
+      <footer className="app-footer">
+        View the code on{" "}
+        <a href="https://github.com/eiriksm/fesk-rt" rel="noreferrer">
+          GitHub
+        </a>
+        .
+      </footer>
     </div>
   );
 }
