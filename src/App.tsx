@@ -5,6 +5,7 @@ import {
   useReducer,
   useRef,
   useState,
+  type ChangeEvent,
 } from "react";
 
 import { DebugMetrics } from "./components/DebugMetrics";
@@ -399,13 +400,24 @@ export function App() {
   const [finalResult, setFinalResult] = useState<{
     pipelineKey: string | null;
     text: string;
-  }>({ pipelineKey: null, text: "" });
+    crcOk: boolean;
+    updatedAt: number | null;
+  }>({ pipelineKey: null, text: "", crcOk: false, updatedAt: null });
   const [recordedWavBlob, setRecordedWavBlob] = useState<Blob | null>(null);
   const [downloadPreparing, setDownloadPreparing] = useState(false);
   const [runMode, setRunMode] = useState<"idle" | "microphone" | "sample">(
     "idle",
   );
   const [isBusy, setIsBusy] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return window.localStorage.getItem("webhookUrl") ?? "";
+    } catch (err) {
+      console.warn("Unable to read webhook URL from storage", err);
+      return "";
+    }
+  });
   const [candidateState, dispatchCandidates] = useReducer(
     candidateReducer,
     undefined,
@@ -613,7 +625,12 @@ export function App() {
       setSampleRateText("—");
       dispatchCandidates({ type: "reset" });
       if (resetFinalResult) {
-        setFinalResult({ pipelineKey: null, text: "" });
+        setFinalResult({
+          pipelineKey: null,
+          text: "",
+          crcOk: false,
+          updatedAt: null,
+        });
       }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
@@ -776,7 +793,15 @@ export function App() {
           patch.updatedAt = Number(result.updatedAt);
         }
         dispatchCandidates({ type: "update", pipelineKey, patch });
-        setFinalResult({ pipelineKey, text: result.text });
+        const updatedAt = Number.isFinite(result.updatedAt)
+          ? Number(result.updatedAt)
+          : Date.now();
+        setFinalResult({
+          pipelineKey,
+          text: result.text,
+          crcOk: Boolean(result.crcOk),
+          updatedAt,
+        });
       } else if (pipelineKey) {
         const patch: CandidatePatch = {
           provisional: true,
@@ -951,6 +976,88 @@ export function App() {
     ? undefined
     : "Recording download requires MediaRecorder support.";
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const value = webhookUrl.trim();
+      if (value) {
+        window.localStorage.setItem("webhookUrl", value);
+      } else {
+        window.localStorage.removeItem("webhookUrl");
+      }
+    } catch (err) {
+      console.warn("Unable to persist webhook URL", err);
+    }
+  }, [webhookUrl]);
+
+  useEffect(() => {
+    const url = webhookUrl.trim();
+    if (!url) return;
+    if (!finalResult.text) return;
+
+    const timestamp = (finalResult.updatedAt ?? Date.now());
+    const payload = {
+      message: finalResult.text,
+      pipelineKey: finalResult.pipelineKey,
+      timestamp: new Date(timestamp).toISOString(),
+      crcOk: finalResult.crcOk,
+    };
+
+    (async () => {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          console.warn(
+            `Webhook POST responded with status ${response.status}`,
+            response.statusText,
+          );
+        }
+      } catch (err) {
+        console.warn("Webhook POST failed", err);
+      }
+    })();
+  }, [finalResult, webhookUrl]);
+
+  const handleWebhookChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setWebhookUrl(event.target.value);
+    },
+    [],
+  );
+
+  const handleSendTestWebhook = useCallback(async () => {
+    const url = webhookUrl.trim();
+    if (!url) return;
+    const now = new Date();
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "Test webhook from FESK decoder",
+          pipelineKey: "test",
+          timestamp: now.toISOString(),
+          crcOk: true,
+          test: true,
+        }),
+      });
+      if (!response.ok) {
+        console.warn(
+          `Test webhook responded with status ${response.status}`,
+          response.statusText,
+        );
+      }
+    } catch (err) {
+      console.warn("Test webhook request failed", err);
+    }
+  }, [webhookUrl]);
+
   return (
     <div className="app">
       <h1>FESK Real-Time Decoder</h1>
@@ -968,6 +1075,24 @@ export function App() {
           title={downloadTitle}
         >
           {downloadLabel}
+        </button>
+        <input
+          id="webhookUrl"
+          className="webhook-input"
+          type="url"
+          placeholder="Webhook URL"
+          value={webhookUrl}
+          onChange={handleWebhookChange}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          className="send-test"
+          onClick={handleSendTestWebhook}
+          disabled={!webhookUrl.trim()}
+        >
+          Send test
         </button>
       </div>
       <details className="debug-panel" hidden={!debugMode}>
