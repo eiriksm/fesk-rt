@@ -829,15 +829,12 @@ export function App() {
           channelCount: { exact: 1 },
           sampleRate: { exact: 48000 },
           latency: { ideal: 0.01 }, // 10ms latency for real-time FSK decoding
-          // Disable voice isolation - we're decoding tones, not speech
-          voiceIsolation: false,
           // Chrome-specific flags (not in standard MediaTrackConstraints)
           googEchoCancellation: false,
           googNoiseSuppression: false,
           googAutoGainControl: false,
           googHighpassFilter: false,
         } as MediaTrackConstraints & {
-          voiceIsolation?: boolean;
           googEchoCancellation?: boolean;
           googNoiseSuppression?: boolean;
           googAutoGainControl?: boolean;
@@ -851,13 +848,11 @@ export function App() {
       if (audioTrack) {
         const settings = audioTrack.getSettings() as MediaTrackSettings & {
           latency?: number;
-          voiceIsolation?: boolean;
         };
         console.info("Audio track settings:", {
           echoCancellation: settings.echoCancellation,
           noiseSuppression: settings.noiseSuppression,
           autoGainControl: settings.autoGainControl,
-          voiceIsolation: settings.voiceIsolation,
           sampleRate: settings.sampleRate,
           channelCount: settings.channelCount,
           latency: settings.latency,
