@@ -7,6 +7,8 @@ FESK decoding, real time ⚡
 
 This decoder is meant to decode messages created with the FESK tx library that ships with the [Second Movement firmware for Sensor Watch](https://github.com/joeycastillo/Second-Movement). After following its setup guide to install the Arm toolchain, enable the FESK tx demo face in your watch build and flash the resulting UF2 to your Sensor Watch as described in the [official hardware documentation](https://www.sensorwatch.net/docs/firmware/flashing/). Once the face is running you can press the alarm button on the watch to broadcast a test FESK frame, and this can be decoded in the web app. Or use the library in your own watch face and broadcast whatever you want.
 
+At the time of writing the FESK tx library is not merged, but can be found here: https://github.com/joeycastillo/second-movement/pull/139
+
 ## Supported character codes
 
 The decoder recognises the following 6-bit codes. The table lists every
