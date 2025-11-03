@@ -17,8 +17,6 @@ import {
   type PipelineDefinition,
 } from "./lib/decoder";
 
-import "./App.css";
-
 const SAMPLE_WAV_CONFIG = [
   { id: "sample1Btn", url: "sample.wav", label: "1" },
   { id: "sample2Btn", url: "sample2.wav", label: "2" },
@@ -965,9 +963,21 @@ export function App() {
     };
   }, []);
 
-  const previewClassNames = ["out-row-text"];
+  const previewTextClasses = [
+    "out-row-text",
+    "whitespace-pre-wrap",
+    "font-mono",
+    "text-sm",
+    "leading-relaxed",
+    "overflow-x-auto",
+    "break-words",
+  ];
   if (previewCandidate) {
-    previewClassNames.push(previewIsProvisional ? "provisional" : "decoded-ok");
+    previewTextClasses.push(
+      previewIsProvisional
+        ? "provisional opacity-70 border-b border-dotted border-zinc-400 pb-1"
+        : "decoded-ok text-emerald-600 font-semibold",
+    );
   }
 
   const previewLabelHidden = !debugMode || !previewLabel;
@@ -977,85 +987,128 @@ export function App() {
     ? undefined
     : "Recording download requires MediaRecorder support.";
 
+  const controlButtonClasses =
+    "flex-1 basis-[220px] min-w-[140px] rounded-md border border-zinc-300 bg-white px-4 py-2 text-base font-medium text-zinc-800 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60";
+
+  const secondaryButtonClasses =
+    "basis-[220px] min-w-[140px] rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60";
+
   return (
-    <div className="app">
-      <h1>FESK Real-Time Decoder</h1>
-      <div className="row controls">
-        <button id="startBtn" onClick={handleStart} disabled={startDisabled}>
-          Start 🎙️
-        </button>
-        <button id="stopBtn" onClick={handleStop} disabled={stopDisabled}>
-          Stop 🚫
-        </button>
-        <button
-          id="downloadBtn"
-          onClick={handleDownload}
-          disabled={downloadDisabled}
-          title={downloadTitle}
+    <div className="app px-4 py-6 sm:px-8">
+      <div className="mx-auto max-w-3xl rounded-none bg-white p-4 shadow-lg sm:p-6">
+        <h1 className="mb-6 text-3xl font-semibold text-zinc-900 sm:text-4xl">
+          FESK Real-Time Decoder
+        </h1>
+        <div className="row controls mt-4 flex flex-wrap gap-3">
+          <button
+            id="startBtn"
+            onClick={handleStart}
+            disabled={startDisabled}
+            className={`${controlButtonClasses} ${startDisabled ? "hidden" : ""}`}
+          >
+            Start 🎙️
+          </button>
+          <button
+            id="stopBtn"
+            onClick={handleStop}
+            disabled={stopDisabled}
+            className={`${controlButtonClasses} ${stopDisabled ? "hidden" : ""}`}
+          >
+            Stop 🚫
+          </button>
+          <button
+            id="downloadBtn"
+            onClick={handleDownload}
+            disabled={downloadDisabled}
+            title={downloadTitle}
+            className={controlButtonClasses}
+          >
+            {downloadLabel}
+          </button>
+        </div>
+        <details className="debug-panel mt-6" hidden={!debugMode}>
+          <summary className="cursor-pointer text-lg font-semibold text-zinc-800">
+            Debug
+          </summary>
+          <div className="debug-panel-content mt-3 grid gap-5">
+            <div className="debug-controls flex flex-wrap gap-3">
+              {SAMPLE_WAV_CONFIG.map((entry) => (
+                <button
+                  id={entry.id}
+                  key={entry.url}
+                  onClick={() => handlePlaySample(entry)}
+                  disabled={sampleButtonsDisabled}
+                  className={secondaryButtonClasses}
+                >
+                  Play Sample {entry.label} 🔊
+                </button>
+              ))}
+            </div>
+            <div className="debug-metrics grid gap-2">
+              <div className="debug-metric flex flex-wrap items-baseline gap-2 text-sm">
+                <strong>Overall status:</strong> <span>{status}</span>
+              </div>
+              <div className="debug-metric flex flex-wrap items-baseline gap-2 text-sm">
+                <strong>SR:</strong> <span>{sampleRateText}</span>
+              </div>
+              <DebugMetrics
+                definitions={metricDefinitions}
+                frequencies={frequencies}
+                statuses={pipelineStatuses}
+              />
+            </div>
+          </div>
+        </details>
+        <div className="row mt-6 text-lg font-semibold text-zinc-800">
+          Decoded output:
+        </div>
+        <div
+          id="out"
+          className="out mt-3 grid gap-3 rounded border border-zinc-200 bg-zinc-50 p-4"
         >
-          {downloadLabel}
-        </button>
-      </div>
-      <details className="debug-panel" hidden={!debugMode}>
-        <summary>Debug</summary>
-        <div className="debug-panel-content">
-          <div className="debug-controls">
-            {SAMPLE_WAV_CONFIG.map((entry) => (
-              <button
-                id={entry.id}
-                key={entry.url}
-                onClick={() => handlePlaySample(entry)}
-                disabled={sampleButtonsDisabled}
+          <div className="out-row preview-row grid gap-2 rounded border border-zinc-200 bg-white p-3">
+            <div className="out-row-header text-sm font-semibold text-zinc-700">
+              Real time
+            </div>
+            <div className="out-row-content grid gap-1">
+              <div
+                className="out-row-label text-xs font-medium uppercase tracking-wide text-zinc-500"
+                hidden={previewLabelHidden}
               >
-                Play Sample {entry.label} 🔊
-              </button>
-            ))}
+                {previewLabel}
+              </div>
+              <div className={previewTextClasses.join(" ")}>{previewText}</div>
+            </div>
           </div>
-          <div className="debug-metrics">
-            <div className="debug-metric">
-              <strong>Overall status:</strong> <span>{status}</span>
+          <div className="out-row result-row grid gap-2 rounded border border-zinc-200 bg-white p-3">
+            <div className="out-row-header text-sm font-semibold text-zinc-700">
+              Final result
             </div>
-            <div className="debug-metric">
-              <strong>SR:</strong> <span>{sampleRateText}</span>
+            <div className="out-row-content grid gap-1">
+              <div
+                className="out-row-label text-xs font-medium uppercase tracking-wide text-zinc-500"
+                hidden={finalLabelHidden}
+              >
+                {finalLabel}
+              </div>
+              <span className="out-row-text decoded-ok whitespace-pre-wrap break-words font-mono text-sm font-semibold leading-relaxed text-emerald-600">
+                {finalResult.text}
+              </span>
             </div>
-            <DebugMetrics
-              definitions={metricDefinitions}
-              frequencies={frequencies}
-              statuses={pipelineStatuses}
-            />
           </div>
         </div>
-      </details>
-      <div className="row">
-        <strong>Decoded output:</strong>
+        <footer className="app-footer mt-10 border-t border-zinc-200 pt-6 text-center text-sm text-zinc-600">
+          View the code on{" "}
+          <a
+            href="https://github.com/eiriksm/fesk-rt"
+            rel="noreferrer"
+            className="font-semibold text-zinc-700 underline-offset-4 hover:underline"
+          >
+            GitHub
+          </a>
+          .
+        </footer>
       </div>
-      <div id="out">
-        <div className="out-row preview-row">
-          <div className="out-row-header">Real time</div>
-          <div className="out-row-content">
-            <div className="out-row-label" hidden={previewLabelHidden}>
-              {previewLabel}
-            </div>
-            <div className={previewClassNames.join(" ")}>{previewText}</div>
-          </div>
-        </div>
-        <div className="out-row result-row">
-          <div className="out-row-header">Final result</div>
-          <div className="out-row-content">
-            <div className="out-row-label" hidden={finalLabelHidden}>
-              {finalLabel}
-            </div>
-            <span className="out-row-text decoded-ok">{finalResult.text}</span>
-          </div>
-        </div>
-      </div>
-      <footer className="app-footer">
-        View the code on{" "}
-        <a href="https://github.com/eiriksm/fesk-rt" rel="noreferrer">
-          GitHub
-        </a>
-        .
-      </footer>
     </div>
   );
 }
