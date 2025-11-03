@@ -60,7 +60,7 @@ possible pattern along with the symbol it represents or how it is reserved.
 | `100110` | 38 | `:` | |
 | `100111` | 39 | `'` | |
 | `101000` | 40 | `"` | |
-| `101001` | 41 | — | Reserved for future expansion |
+| `101001` | 41 | Line feed (`\n`) | |
 | `101010` | 42 | — | Reserved for future expansion |
 | `101011` | 43 | — | Reserved for future expansion |
 | `101100` | 44 | — | Reserved for future expansion |
@@ -86,10 +86,13 @@ possible pattern along with the symbol it represents or how it is reserved.
 
 </details>
 
-Codes 41 through 61 are reserved for future expansion and should not appear in
+Codes 42 through 61 are reserved for future expansion and should not appear in
 normal frames. Codes 62 and 63 mark frame boundaries and are not emitted as
 characters.
 
 ## Why "FESK"?
 FESK is a word play on FSK [(Frequency-shift keying](https://en.wikipedia.org/wiki/Frequency-shift_keying)). The FESK protocol itself is a binary FSK (BFSK). But the word “fesk” means “fish” in northern Norwegian dialect. Coincidentally, in Norway, I would say one can also use the word as a mild swear word. Something like “what the fish” or “oh… fish!”
 
+## Built with AI Assistance
+
+This project is crafted with help from AI tools but steered with human supervision. OpenAI's gpt-5-codex model assists with code, code reviews and implementation planning, and Anthropic's Claude 4.5 Sonnet model has provided complementary insights, debugging and code during those same review, planning and coding sessions. It's very, very far from a one shot prompt 😅
