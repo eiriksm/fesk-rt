@@ -964,6 +964,7 @@ export function App() {
   }, []);
 
   const previewTextClasses = [
+    "out-row-text",
     "whitespace-pre-wrap",
     "font-mono",
     "text-sm",
@@ -974,8 +975,8 @@ export function App() {
   if (previewCandidate) {
     previewTextClasses.push(
       previewIsProvisional
-        ? "opacity-70 border-b border-dotted border-zinc-400 pb-1"
-        : "text-emerald-600 font-semibold",
+        ? "provisional opacity-70 border-b border-dotted border-zinc-400 pb-1"
+        : "decoded-ok text-emerald-600 font-semibold",
     );
   }
 
@@ -993,12 +994,12 @@ export function App() {
     "basis-[220px] min-w-[140px] rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60";
 
   return (
-    <div className="px-4 py-6 sm:px-8">
+    <div className="app px-4 py-6 sm:px-8">
       <div className="mx-auto max-w-3xl rounded-none bg-white p-4 shadow-lg sm:p-6">
         <h1 className="mb-6 text-3xl font-semibold text-zinc-900 sm:text-4xl">
           FESK Real-Time Decoder
         </h1>
-        <div className="mt-4 flex flex-wrap gap-3">
+        <div className="row controls mt-4 flex flex-wrap gap-3">
           <button
             id="startBtn"
             onClick={handleStart}
@@ -1025,12 +1026,12 @@ export function App() {
             {downloadLabel}
           </button>
         </div>
-        <details className="mt-6" hidden={!debugMode}>
+        <details className="debug-panel mt-6" hidden={!debugMode}>
           <summary className="cursor-pointer text-lg font-semibold text-zinc-800">
             Debug
           </summary>
-          <div className="mt-3 grid gap-5">
-            <div className="flex flex-wrap gap-3">
+          <div className="debug-panel-content mt-3 grid gap-5">
+            <div className="debug-controls flex flex-wrap gap-3">
               {SAMPLE_WAV_CONFIG.map((entry) => (
                 <button
                   id={entry.id}
@@ -1043,11 +1044,11 @@ export function App() {
                 </button>
               ))}
             </div>
-            <div className="grid gap-2">
-              <div className="flex flex-wrap items-baseline gap-2 text-sm">
+            <div className="debug-metrics grid gap-2">
+              <div className="debug-metric flex flex-wrap items-baseline gap-2 text-sm">
                 <strong>Overall status:</strong> <span>{status}</span>
               </div>
-              <div className="flex flex-wrap items-baseline gap-2 text-sm">
+              <div className="debug-metric flex flex-wrap items-baseline gap-2 text-sm">
                 <strong>SR:</strong> <span>{sampleRateText}</span>
               </div>
               <DebugMetrics
@@ -1058,15 +1059,20 @@ export function App() {
             </div>
           </div>
         </details>
-        <div className="mt-6 text-lg font-semibold text-zinc-800">
+        <div className="row mt-6 text-lg font-semibold text-zinc-800">
           Decoded output:
         </div>
-        <div className="mt-3 grid gap-3 rounded border border-zinc-200 bg-zinc-50 p-4">
-          <div className="grid gap-2 rounded border border-zinc-200 bg-white p-3">
-            <div className="text-sm font-semibold text-zinc-700">Real time</div>
-            <div className="grid gap-1">
+        <div
+          id="out"
+          className="out mt-3 grid gap-3 rounded border border-zinc-200 bg-zinc-50 p-4"
+        >
+          <div className="out-row preview-row grid gap-2 rounded border border-zinc-200 bg-white p-3">
+            <div className="out-row-header text-sm font-semibold text-zinc-700">
+              Real time
+            </div>
+            <div className="out-row-content grid gap-1">
               <div
-                className="text-xs font-medium uppercase tracking-wide text-zinc-500"
+                className="out-row-label text-xs font-medium uppercase tracking-wide text-zinc-500"
                 hidden={previewLabelHidden}
               >
                 {previewLabel}
@@ -1074,22 +1080,24 @@ export function App() {
               <div className={previewTextClasses.join(" ")}>{previewText}</div>
             </div>
           </div>
-          <div className="grid gap-2 rounded border border-zinc-200 bg-white p-3">
-            <div className="text-sm font-semibold text-zinc-700">Final result</div>
-            <div className="grid gap-1">
+          <div className="out-row result-row grid gap-2 rounded border border-zinc-200 bg-white p-3">
+            <div className="out-row-header text-sm font-semibold text-zinc-700">
+              Final result
+            </div>
+            <div className="out-row-content grid gap-1">
               <div
-                className="text-xs font-medium uppercase tracking-wide text-zinc-500"
+                className="out-row-label text-xs font-medium uppercase tracking-wide text-zinc-500"
                 hidden={finalLabelHidden}
               >
                 {finalLabel}
               </div>
-              <span className="whitespace-pre-wrap break-words font-mono text-sm font-semibold leading-relaxed text-emerald-600">
+              <span className="out-row-text decoded-ok whitespace-pre-wrap break-words font-mono text-sm font-semibold leading-relaxed text-emerald-600">
                 {finalResult.text}
               </span>
             </div>
           </div>
         </div>
-        <footer className="mt-10 border-t border-zinc-200 pt-6 text-center text-sm text-zinc-600">
+        <footer className="app-footer mt-10 border-t border-zinc-200 pt-6 text-center text-sm text-zinc-600">
           View the code on{" "}
           <a
             href="https://github.com/eiriksm/fesk-rt"
