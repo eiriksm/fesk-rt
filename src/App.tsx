@@ -418,6 +418,10 @@ export function App() {
       return "";
     }
   });
+  const [webhookStatus, setWebhookStatus] = useState<
+    "idle" | "loading" | "sent" | "error"
+  >("idle");
+  const [webhookLastResponse, setWebhookLastResponse] = useState<string>("");
   const [candidateState, dispatchCandidates] = useReducer(
     candidateReducer,
     undefined,
@@ -991,6 +995,64 @@ export function App() {
   }, [webhookUrl]);
 
   useEffect(() => {
+    if (!webhookUrl.trim()) {
+      setWebhookStatus("idle");
+      setWebhookLastResponse("");
+    }
+  }, [webhookUrl]);
+
+  const sendWebhookRequest = useCallback(
+    async (
+      url: string,
+      payload: Record<string, unknown>,
+      context: "final" | "test",
+    ) => {
+      setWebhookStatus("loading");
+      const label = context === "test" ? "Test" : "Final";
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        let responseBody = "";
+        try {
+          responseBody = await response.text();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          responseBody = `Unable to read response body: ${message}`;
+        }
+        const statusLine = `${response.status} ${response.statusText}`.trim();
+        const details = [label, statusLine]
+          .concat(responseBody ? [responseBody] : [])
+          .filter(Boolean)
+          .join(" • ");
+        setWebhookLastResponse(details);
+        if (!response.ok) {
+          console.warn(
+            `${label} webhook responded with status ${response.status}`,
+            response.statusText,
+          );
+          setWebhookStatus("error");
+        } else {
+          setWebhookStatus("sent");
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setWebhookLastResponse(`${label} error: ${message}`);
+        console.warn(
+          `${label === "Test" ? "Test webhook request" : "Webhook POST"} failed`,
+          err,
+        );
+        setWebhookStatus("error");
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
     const url = webhookUrl.trim();
     if (!url) return;
     if (!finalResult.text) return;
@@ -1003,26 +1065,8 @@ export function App() {
       crcOk: finalResult.crcOk,
     };
 
-    (async () => {
-      try {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-          console.warn(
-            `Webhook POST responded with status ${response.status}`,
-            response.statusText,
-          );
-        }
-      } catch (err) {
-        console.warn("Webhook POST failed", err);
-      }
-    })();
-  }, [finalResult, webhookUrl]);
+    void sendWebhookRequest(url, payload, "final");
+  }, [finalResult, sendWebhookRequest, webhookUrl]);
 
   const handleWebhookChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -1035,28 +1079,18 @@ export function App() {
     const url = webhookUrl.trim();
     if (!url) return;
     const now = new Date();
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: "Test webhook from FESK decoder",
-          pipelineKey: "test",
-          timestamp: now.toISOString(),
-          crcOk: true,
-          test: true,
-        }),
-      });
-      if (!response.ok) {
-        console.warn(
-          `Test webhook responded with status ${response.status}`,
-          response.statusText,
-        );
-      }
-    } catch (err) {
-      console.warn("Test webhook request failed", err);
-    }
-  }, [webhookUrl]);
+    await sendWebhookRequest(
+      url,
+      {
+        message: "Test webhook from FESK decoder",
+        pipelineKey: "test",
+        timestamp: now.toISOString(),
+        crcOk: true,
+        test: true,
+      },
+      "test",
+    );
+  }, [sendWebhookRequest, webhookUrl]);
 
   return (
     <div className="app">
@@ -1075,24 +1109,6 @@ export function App() {
           title={downloadTitle}
         >
           {downloadLabel}
-        </button>
-        <input
-          id="webhookUrl"
-          className="webhook-input"
-          type="url"
-          placeholder="Webhook URL"
-          value={webhookUrl}
-          onChange={handleWebhookChange}
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <button
-          type="button"
-          className="send-test"
-          onClick={handleSendTestWebhook}
-          disabled={!webhookUrl.trim()}
-        >
-          Send test
         </button>
       </div>
       <details className="debug-panel" hidden={!debugMode}>
@@ -1148,6 +1164,39 @@ export function App() {
           </div>
         </div>
       </div>
+      <details className="webhook-panel" defaultOpen={Boolean(webhookUrl)}>
+        <summary>Webhook</summary>
+        <div className="webhook-panel-content">
+          <label className="webhook-field" htmlFor="webhookUrl">
+            <span>Webhook URL</span>
+            <input
+              id="webhookUrl"
+              type="url"
+              placeholder="https://example.com/webhook"
+              value={webhookUrl}
+              onChange={handleWebhookChange}
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </label>
+          <div className="webhook-actions">
+            <button
+              type="button"
+              onClick={handleSendTestWebhook}
+              disabled={!webhookUrl.trim()}
+            >
+              Send test
+            </button>
+            <div className="webhook-status">
+              <strong>Status:</strong> <span>{webhookStatus}</span>
+            </div>
+          </div>
+          <div className="webhook-response">
+            <strong>Last response:</strong>
+            <pre>{webhookLastResponse || "—"}</pre>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
