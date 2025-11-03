@@ -73,6 +73,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
       this.resetToneState();
       this.banks = this._buildBanks(freqSets);
       this.ready = true;
+
       this.port.postMessage({
         t: "ready",
         sr: sampleRate,
@@ -245,7 +246,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
     }
     const block = new Float32Array(length);
     for (let i = 0; i < length; i++) block[i] = this.toneBuffer[start + i];
-    const w = Math.min(Math.floor(0.005 * sampleRate), block.length >> 2);
+    const w = Math.min(Math.floor(0.005 * this.sampleRate), block.length >> 2);
     if (w > 0) {
       for (let i = 0; i < w; i++) {
         const r = 0.5 - 0.5 * Math.cos((Math.PI * i) / (w - 1));
@@ -253,6 +254,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
         block[block.length - 1 - i] *= r;
       }
     }
+
     const results = [];
     for (let b = 0; b < this.banks.length; b++) {
       const bank = this.banks[b];
@@ -304,12 +306,14 @@ class MultiBankFESK extends AudioWorkletProcessor {
         powers: Array.from(energies),
       });
     }
-    if (results.length)
+
+    if (results.length) {
       this.port.postMessage({
         t: "candidates",
         pipeline: this.pipelineKey,
         results,
       });
+    }
     this.resetToneState();
   }
 
@@ -317,14 +321,18 @@ class MultiBankFESK extends AudioWorkletProcessor {
     if (!this.ready) return true;
     const x = inputs[0]?.[0];
     if (!x) return true;
+
     for (let i = 0; i < x.length; i++) {
       const sample = x[i];
+
       const filtered = sample - this.hpLastX + this.hpAlpha * this.hpLastY;
       this.hpLastX = sample;
       this.hpLastY = filtered;
       const energy = filtered * filtered;
-      this.energyEnv =
-        this.energyEnv * this.energyDecay + energy * this.energyRise;
+
+      // Update energy envelope with exponential smoothing
+      this.energyEnv = this.energyEnv * this.energyDecay + energy * this.energyRise;
+
       if (!this.toneActive) {
         if (this.energyEnv >= this.energyOn) {
           this.toneActive = true;
@@ -336,6 +344,7 @@ class MultiBankFESK extends AudioWorkletProcessor {
       if (this.toneActive) {
         this.toneBuffer.push(filtered);
         this.toneSamples++;
+
         if (this.energyEnv <= this.energyOff) {
           this.gapSamples++;
           if (this.gapSamples >= this.minGapSamples) {
