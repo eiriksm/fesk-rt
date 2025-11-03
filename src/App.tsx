@@ -995,7 +995,7 @@ export function App() {
     if (!url) return;
     if (!finalResult.text) return;
 
-    const timestamp = (finalResult.updatedAt ?? Date.now());
+    const timestamp = finalResult.updatedAt ?? Date.now();
     const payload = {
       message: finalResult.text,
       pipelineKey: finalResult.pipelineKey,
