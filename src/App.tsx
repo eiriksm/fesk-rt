@@ -5,6 +5,7 @@ import {
   useReducer,
   useRef,
   useState,
+  type ChangeEvent,
 } from "react";
 
 import { DebugMetrics } from "./components/DebugMetrics";
@@ -399,13 +400,33 @@ export function App() {
   const [finalResult, setFinalResult] = useState<{
     pipelineKey: string | null;
     text: string;
-  }>({ pipelineKey: null, text: "" });
+    crcOk: boolean;
+    updatedAt: number | null;
+  }>({ pipelineKey: null, text: "", crcOk: false, updatedAt: null });
   const [recordedWavBlob, setRecordedWavBlob] = useState<Blob | null>(null);
   const [downloadPreparing, setDownloadPreparing] = useState(false);
   const [runMode, setRunMode] = useState<"idle" | "microphone" | "sample">(
     "idle",
   );
   const [isBusy, setIsBusy] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return window.localStorage.getItem("webhookUrl") ?? "";
+    } catch (err) {
+      console.warn("Unable to read webhook URL from storage", err);
+      return "";
+    }
+  });
+  const [webhookStatus, setWebhookStatus] = useState<
+    "idle" | "loading" | "sent" | "error"
+  >("idle");
+  const [webhookLastRequestBody, setWebhookLastRequestBody] =
+    useState<string>("");
+  const [webhookLastRequestContext, setWebhookLastRequestContext] = useState<
+    "final" | "test" | null
+  >(null);
+  const [webhookLastResponse, setWebhookLastResponse] = useState<string>("");
   const [candidateState, dispatchCandidates] = useReducer(
     candidateReducer,
     undefined,
@@ -613,7 +634,12 @@ export function App() {
       setSampleRateText("—");
       dispatchCandidates({ type: "reset" });
       if (resetFinalResult) {
-        setFinalResult({ pipelineKey: null, text: "" });
+        setFinalResult({
+          pipelineKey: null,
+          text: "",
+          crcOk: false,
+          updatedAt: null,
+        });
       }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
@@ -776,7 +802,15 @@ export function App() {
           patch.updatedAt = Number(result.updatedAt);
         }
         dispatchCandidates({ type: "update", pipelineKey, patch });
-        setFinalResult({ pipelineKey, text: result.text });
+        const updatedAt = Number.isFinite(result.updatedAt)
+          ? Number(result.updatedAt)
+          : Date.now();
+        setFinalResult({
+          pipelineKey,
+          text: result.text,
+          crcOk: Boolean(result.crcOk),
+          updatedAt,
+        });
       } else if (pipelineKey) {
         const patch: CandidatePatch = {
           provisional: true,
@@ -951,6 +985,129 @@ export function App() {
     ? undefined
     : "Recording download requires MediaRecorder support.";
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const value = webhookUrl.trim();
+      if (value) {
+        window.localStorage.setItem("webhookUrl", value);
+      } else {
+        window.localStorage.removeItem("webhookUrl");
+      }
+    } catch (err) {
+      console.warn("Unable to persist webhook URL", err);
+    }
+  }, [webhookUrl]);
+
+  useEffect(() => {
+    if (!webhookUrl.trim()) {
+      setWebhookStatus("idle");
+      setWebhookLastRequestBody("");
+      setWebhookLastRequestContext(null);
+      setWebhookLastResponse("");
+    }
+  }, [webhookUrl]);
+
+  const sendWebhookRequest = useCallback(
+    async (
+      url: string,
+      payload: Record<string, unknown>,
+      context: "final" | "test",
+    ) => {
+      setWebhookStatus("loading");
+      const label = context === "test" ? "Test" : "Final";
+      setWebhookLastRequestContext(context);
+      try {
+        setWebhookLastRequestBody(JSON.stringify(payload, null, 2));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setWebhookLastRequestBody(
+          `Unable to stringify request payload: ${message}`,
+        );
+      }
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        let responseBody = "";
+        try {
+          responseBody = await response.text();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          responseBody = `Unable to read response body: ${message}`;
+        }
+        const statusLine = `${response.status} ${response.statusText}`.trim();
+        const summary = `${label} response: ${statusLine}`;
+        const details = responseBody
+          ? `${summary}\n\n${responseBody}`
+          : summary;
+        setWebhookLastResponse(details);
+        if (!response.ok) {
+          console.warn(
+            `${label} webhook responded with status ${response.status}`,
+            response.statusText,
+          );
+          setWebhookStatus("error");
+        } else {
+          setWebhookStatus("sent");
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setWebhookLastResponse(`${label} error: ${message}`);
+        console.warn(
+          `${label === "Test" ? "Test webhook request" : "Webhook POST"} failed`,
+          err,
+        );
+        setWebhookStatus("error");
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const url = webhookUrl.trim();
+    if (!url) return;
+    if (!finalResult.text) return;
+
+    const timestamp = finalResult.updatedAt ?? Date.now();
+    const payload = {
+      message: finalResult.text,
+      pipelineKey: finalResult.pipelineKey,
+      timestamp: new Date(timestamp).toISOString(),
+      crcOk: finalResult.crcOk,
+    };
+
+    void sendWebhookRequest(url, payload, "final");
+  }, [finalResult, sendWebhookRequest, webhookUrl]);
+
+  const handleWebhookChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setWebhookUrl(event.target.value);
+    },
+    [],
+  );
+
+  const handleSendTestWebhook = useCallback(async () => {
+    const url = webhookUrl.trim();
+    if (!url) return;
+    const now = new Date();
+    await sendWebhookRequest(
+      url,
+      {
+        message: "Test webhook from FESK decoder",
+        pipelineKey: "test",
+        timestamp: now.toISOString(),
+        crcOk: true,
+        test: true,
+      },
+      "test",
+    );
+  }, [sendWebhookRequest, webhookUrl]);
+
   return (
     <div className="app">
       <h1>FESK Real-Time Decoder</h1>
@@ -1023,6 +1180,49 @@ export function App() {
           </div>
         </div>
       </div>
+      <details className="webhook-panel" defaultOpen={Boolean(webhookUrl)}>
+        <summary>Webhook</summary>
+        <div className="webhook-panel-content">
+          <label className="webhook-field" htmlFor="webhookUrl">
+            <span>Webhook URL</span>
+            <input
+              id="webhookUrl"
+              type="url"
+              placeholder="https://example.com/webhook"
+              value={webhookUrl}
+              onChange={handleWebhookChange}
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </label>
+          <div className="webhook-request">
+            <strong>Last request:</strong>
+            <pre>
+              {webhookLastRequestBody
+                ? `${
+                    webhookLastRequestContext === "test" ? "Test" : "Final"
+                  } request\n\n${webhookLastRequestBody}`
+                : "—"}
+            </pre>
+          </div>
+          <div className="webhook-actions">
+            <button
+              type="button"
+              onClick={handleSendTestWebhook}
+              disabled={!webhookUrl.trim()}
+            >
+              Send test
+            </button>
+            <div className="webhook-status">
+              <strong>Status:</strong> <span>{webhookStatus}</span>
+            </div>
+          </div>
+          <div className="webhook-response">
+            <strong>Last response:</strong>
+            <pre>{webhookLastResponse || "—"}</pre>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
