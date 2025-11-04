@@ -17,3 +17,9 @@ updates:
           - "react-dom"
           - "@types/react"
           - "@types/react-dom"
+      eslint:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "@typescript-eslint/*"
