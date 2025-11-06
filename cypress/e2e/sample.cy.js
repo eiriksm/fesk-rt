@@ -105,4 +105,18 @@ describe("FESK real time with known samples", () => {
       .should("not.be.empty")
       .should("contain.text", "test");
   });
+
+  it("Should decode audio from sample 11 with newline", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 10000 }).click();
+    cy.get("#sample11Btn").click();
+    cy.get("#out .decoded-ok", { timeout: 60000 })
+      .should("not.be.empty")
+      .should(
+        "contain.text",
+        `test
+test`,
+      );
+  });
 });
