@@ -404,6 +404,7 @@ export function App() {
     pipelineKey: string | null;
     text: string;
   }>({ pipelineKey: null, text: "" });
+  const [decodedImageUrl, setDecodedImageUrl] = useState<string | null>(null);
   const [recordedWavBlob, setRecordedWavBlob] = useState<Blob | null>(null);
   const [downloadPreparing, setDownloadPreparing] = useState(false);
   const [runMode, setRunMode] = useState<"idle" | "microphone" | "sample">(
@@ -618,6 +619,10 @@ export function App() {
       dispatchCandidates({ type: "reset" });
       if (resetFinalResult) {
         setFinalResult({ pipelineKey: null, text: "" });
+        setDecodedImageUrl((prevUrl) => {
+          if (prevUrl) URL.revokeObjectURL(prevUrl);
+          return null;
+        });
       }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
@@ -734,6 +739,57 @@ export function App() {
     [handleSamplePlaybackEnded],
   );
 
+  const tryDecodeAsBase32Image = useCallback((text: string): string | null => {
+    try {
+      // RFC 4648 base32 alphabet
+      const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+      const normalized = text.toUpperCase().replace(/[=\s]/g, "");
+
+      // Validate base32 characters
+      for (let i = 0; i < normalized.length; i++) {
+        if (!base32Alphabet.includes(normalized[i])) {
+          return null;
+        }
+      }
+
+      // Decode base32
+      const bytes: number[] = [];
+      let bits = 0;
+      let value = 0;
+
+      for (let i = 0; i < normalized.length; i++) {
+        const char = normalized[i];
+        const index = base32Alphabet.indexOf(char);
+        if (index === -1) return null;
+
+        value = (value << 5) | index;
+        bits += 5;
+
+        if (bits >= 8) {
+          bytes.push((value >>> (bits - 8)) & 0xff);
+          bits -= 8;
+        }
+      }
+
+      if (bytes.length === 0) return null;
+
+      // Check for WebP signature (RIFF....WEBP)
+      const hasWebPSignature =
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && // "RIFF"
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;  // "WEBP"
+
+      if (!hasWebPSignature) return null;
+
+      // Create blob and data URL
+      const blob = new Blob([new Uint8Array(bytes)], { type: "image/webp" });
+      return URL.createObjectURL(blob);
+    } catch (err) {
+      console.debug("Base32 decode failed:", err);
+      return null;
+    }
+  }, []);
+
   const handlePreviewEvent = useCallback((payload: DecoderPreviewEvent) => {
     if (!payload?.pipelineKey) return;
     const pipelineKey: string = payload.pipelineKey;
@@ -781,6 +837,22 @@ export function App() {
         }
         dispatchCandidates({ type: "update", pipelineKey, patch });
         setFinalResult({ pipelineKey, text: result.text });
+
+        // Attempt base32 decode as image
+        const imageUrl = tryDecodeAsBase32Image(result.text);
+        if (imageUrl) {
+          console.info(`[${label}] Base32 decoded as WebP image`);
+          // Revoke old URL to prevent memory leak
+          setDecodedImageUrl((prevUrl) => {
+            if (prevUrl) URL.revokeObjectURL(prevUrl);
+            return imageUrl;
+          });
+        } else {
+          setDecodedImageUrl((prevUrl) => {
+            if (prevUrl) URL.revokeObjectURL(prevUrl);
+            return null;
+          });
+        }
       } else if (pipelineKey) {
         const patch: CandidatePatch = {
           provisional: true,
@@ -813,7 +885,14 @@ export function App() {
         console.warn(`[${label}] frame decode fail`);
       }
     },
-    [dispatchCandidates, isBusy, pipelineByKey, runMode, triggerAutoStop],
+    [
+      dispatchCandidates,
+      isBusy,
+      pipelineByKey,
+      runMode,
+      triggerAutoStop,
+      tryDecodeAsBase32Image,
+    ],
   );
 
   const handleStart = useCallback(async () => {
@@ -1050,6 +1129,15 @@ export function App() {
               {finalLabel}
             </div>
             <span className="out-row-text decoded-ok">{finalResult.text}</span>
+            {decodedImageUrl && (
+              <div className="decoded-image-container">
+                <img
+                  src={decodedImageUrl}
+                  alt="Base32 decoded WebP"
+                  className="decoded-image"
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
