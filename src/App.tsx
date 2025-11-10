@@ -773,16 +773,23 @@ export function App() {
 
       if (bytes.length === 0) return null;
 
+      // Check for PNG signature (89 50 4E 47 0D 0A 1A 0A)
+      const hasPNGSignature =
+        bytes.length >= 8 &&
+        bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+        bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
+
       // Check for WebP signature (RIFF....WEBP)
       const hasWebPSignature =
         bytes.length >= 12 &&
         bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && // "RIFF"
         bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;  // "WEBP"
 
-      if (!hasWebPSignature) return null;
+      if (!hasPNGSignature && !hasWebPSignature) return null;
 
-      // Create blob and data URL
-      const blob = new Blob([new Uint8Array(bytes)], { type: "image/webp" });
+      // Create blob and data URL with appropriate MIME type
+      const mimeType = hasPNGSignature ? "image/png" : "image/webp";
+      const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
       return URL.createObjectURL(blob);
     } catch (err) {
       console.debug("Base32 decode failed:", err);
@@ -841,7 +848,7 @@ export function App() {
         // Attempt base32 decode as image
         const imageUrl = tryDecodeAsBase32Image(result.text);
         if (imageUrl) {
-          console.info(`[${label}] Base32 decoded as WebP image`);
+          console.info(`[${label}] Base32 decoded as image`);
           // Revoke old URL to prevent memory leak
           setDecodedImageUrl((prevUrl) => {
             if (prevUrl) URL.revokeObjectURL(prevUrl);
@@ -1133,7 +1140,7 @@ export function App() {
               <div className="decoded-image-container">
                 <img
                   src={decodedImageUrl}
-                  alt="Base32 decoded WebP"
+                  alt="Base32 decoded image"
                   className="decoded-image"
                 />
               </div>
