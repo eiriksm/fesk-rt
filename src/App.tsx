@@ -39,6 +39,8 @@ const SAMPLE_WAV_CONFIG = [
   { id: "sample9Btn", url: "sample-uptime-sim.wav", label: "9" },
   { id: "sample10Btn", url: "sample-from-pr.wav", label: "10" },
   { id: "sample11Btn", url: "sample-with-newline.wav", label: "11" },
+  { id: "sample12Btn", url: "sample-with-c32.wav", label: "12" },
+  { id: "sample13Btn", url: "sample-with-c32-long.wav", label: "13" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";

@@ -119,4 +119,26 @@ describe("FESK real time with known samples", () => {
 test`,
       );
   });
+  it("Should decode audio from sample 12 built from counter-32 branch", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 10000 }).click();
+    cy.get("#sample12Btn").click();
+    cy.get("#out .decoded-ok", { timeout: 60000 })
+      .should("not.be.empty")
+      .should("contain.text", "test");
+  });
+  it("Should decode audio from sample 13 built from counter-32 branch (long)", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 10000 }).click();
+    cy.get("#sample13Btn").click();
+    cy.get("#out .decoded-ok", { timeout: 120000 })
+      .should("not.be.empty")
+      // This is a really long one. In fact a base32 encoded 4 pixel image.
+      .should(
+        "contain.text",
+        "rfie4rynbinauaaaaagusscekiaaaaacaaaaaaqcamaaaaap3ds3oaaaaaaxgushiia5tsjmp4aaaaajobefs4yaaafrgaaabmjqcae2tqmaaaaabrieyvcfuk737777777vww2skjjduqzpdaaaaaamjfcecvdytrrriyg4aaaab2qaynvjxuloaaaaaacjivhejlscmcba",
+      );
+  });
 });
