@@ -9,7 +9,7 @@ const END_MARK_BITS = Array.from(
 );
 
 const DEFAULT_FREQS_SETS = [
-  [2560.0, 3072.0],
+  [2490.2, 3134.8],
   [7394.0, 9313.0],
 ];
 
