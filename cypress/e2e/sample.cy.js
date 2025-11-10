@@ -126,11 +126,8 @@ test`,
     cy.get("#sample12Btn").click();
     cy.get("#out .decoded-ok", { timeout: 60000 })
       .should("not.be.empty")
-      .should(
-        "contain.text",
-        "test",
-      );
-  })
+      .should("contain.text", "test");
+  });
   it("Should decode audio from sample 13 built from counter-32 branch (long)", () => {
     cy.visit("/?debug=1");
 
@@ -143,5 +140,5 @@ test`,
         "contain.text",
         "rfie4rynbinauaaaaagusscekiaaaaacaaaaaaqcamaaaaap3ds3oaaaaaaxgushiia5tsjmp4aaaaajobefs4yaaafrgaaabmjqcae2tqmaaaaabrieyvcfuk737777777vww2skjjduqzpdaaaaaamjfcecvdytrrriyg4aaaab2qaynvjxuloaaaaaacjivhejlscmcba",
       );
-  })
+  });
 });
