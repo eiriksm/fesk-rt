@@ -12,7 +12,7 @@
  */
 
 import { EventEmitter } from "events";
-import { FeskCore } from "./fesk-core.js";
+import { FeskCore } from "../../public/lib/fesk-core.js";
 
 export class FeskBatchProcessor extends EventEmitter {
   /**

@@ -4,7 +4,7 @@
  * for use in the Web Audio API AudioWorklet context.
  */
 
-import { FeskCore } from "/src/lib/fesk-core.js";
+import { FeskCore } from "/lib/fesk-core.js";
 
 class MultiBankFESK extends AudioWorkletProcessor {
   constructor() {
