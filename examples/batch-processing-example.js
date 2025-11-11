@@ -6,7 +6,6 @@
  */
 
 import { FeskBatchProcessor, processAudio } from '../src/lib/fesk-batch-processor.js';
-import fs from 'fs';
 
 // Example 1: Quick one-liner for processing a complete audio buffer
 async function quickExample() {
@@ -115,6 +114,7 @@ async function wavFileExample() {
   // This is pseudocode - you'd need a WAV decoder library like 'node-wav' or 'wav-decoder'
   /*
   import { decode } from 'wav-decoder';
+  import fs from 'fs';
 
   const wavBuffer = fs.readFileSync('path/to/audio.wav');
   const audioData = await decode(wavBuffer);
