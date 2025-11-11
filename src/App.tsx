@@ -405,6 +405,7 @@ export function App() {
     text: string;
   }>({ pipelineKey: null, text: "" });
   const [decodedImageUrl, setDecodedImageUrl] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState<number>(1);
   const [recordedWavBlob, setRecordedWavBlob] = useState<Blob | null>(null);
   const [downloadPreparing, setDownloadPreparing] = useState(false);
   const [runMode, setRunMode] = useState<"idle" | "microphone" | "sample">(
@@ -623,6 +624,7 @@ export function App() {
           if (prevUrl) URL.revokeObjectURL(prevUrl);
           return null;
         });
+        setImageScale(1);
       }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
@@ -859,6 +861,7 @@ export function App() {
             if (prevUrl) URL.revokeObjectURL(prevUrl);
             return null;
           });
+          setImageScale(1);
         }
       } else if (pipelineKey) {
         const patch: CandidatePatch = {
@@ -1027,6 +1030,22 @@ export function App() {
     });
   }, [recordedWavBlob]);
 
+  const handleImageLoad = useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const img = event.currentTarget;
+      const minHeight = 50;
+      const naturalHeight = img.naturalHeight;
+
+      if (naturalHeight > 0 && naturalHeight < minHeight) {
+        const scale = Math.ceil(minHeight / naturalHeight);
+        setImageScale(scale);
+      } else {
+        setImageScale(1);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     const offState = decoder.events.on("state", handleStateEvent);
     const offPreview = decoder.events.on("preview", handlePreviewEvent);
@@ -1142,6 +1161,11 @@ export function App() {
                   src={decodedImageUrl}
                   alt="Base32 decoded image"
                   className="decoded-image"
+                  onLoad={handleImageLoad}
+                  style={{
+                    transform: `scale(${imageScale})`,
+                    transformOrigin: "top left",
+                  }}
                 />
               </div>
             )}
