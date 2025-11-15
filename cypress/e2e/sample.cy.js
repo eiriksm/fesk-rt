@@ -141,4 +141,13 @@ test`,
         "rfie4rynbinauaaaaagusscekiaaaaacaaaaaaqcamaaaaap3ds3oaaaaaaxgushiia5tsjmp4aaaaajobefs4yaaafrgaaabmjqcae2tqmaaaaabrieyvcfuk737777777vww2skjjduqzpdaaaaaamjfcecvdytrrriyg4aaaab2qaynvjxuloaaaaaacjivhejlscmcba",
       );
   });
+  it("Should decode audio from sample 14 uptime from c32", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 10000 }).click();
+    cy.get("#sample14Btn").click();
+    cy.get("#out .decoded-ok", { timeout: 60000 })
+      .should("not.be.empty")
+      .should("contain.text", "uptime 426 seconds");
+  });
 });
