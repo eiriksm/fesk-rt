@@ -148,6 +148,6 @@ test`,
     cy.get("#sample14Btn").click();
     cy.get("#out .decoded-ok", { timeout: 60000 })
       .should("not.be.empty")
-      .should("contain.text", "uptime");
+      .should("contain.text", "uptime 426 seconds");
   });
 });
