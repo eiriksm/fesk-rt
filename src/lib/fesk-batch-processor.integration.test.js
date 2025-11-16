@@ -1,6 +1,15 @@
 /**
  * Integration tests for FeskBatchProcessor with real audio samples
  * Tests that the batch processor can decode actual recorded audio files
+ *
+ * Note: We use FeskBatchProcessor (which wraps the shared FeskCore) instead
+ * of the full browser decoder with node-web-audio-api because:
+ * - FeskBatchProcessor uses the SAME core algorithm as the AudioWorklet
+ * - It has a cleaner EventEmitter-based API for Node.js
+ * - It's purpose-built for batch/offline processing
+ * - No browser polyfills or globals needed
+ *
+ * This ensures zero code duplication while providing an optimal Node.js experience.
  */
 
 import { describe, it, expect } from 'vitest';
