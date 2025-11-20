@@ -1042,21 +1042,9 @@ export function App() {
     });
   }, [recordedWavBlob]);
 
-  const handleImageLoad = useCallback(
-    (event: React.SyntheticEvent<HTMLImageElement>) => {
-      const img = event.currentTarget;
-      const minHeight = 50;
-      const naturalHeight = img.naturalHeight;
-
-      if (naturalHeight > 0 && naturalHeight < minHeight) {
-        const scale = Math.ceil(minHeight / naturalHeight);
-        setImageScale(scale);
-      } else {
-        setImageScale(1);
-      }
-    },
-    [],
-  );
+  const handleScaleChange = useCallback((scale: number) => {
+    setImageScale(scale);
+  }, []);
 
   useEffect(() => {
     const offState = decoder.events.on("state", handleStateEvent);
@@ -1168,18 +1156,31 @@ export function App() {
             </div>
             <span className="out-row-text decoded-ok">{finalResult.text}</span>
             {decodedImageUrl && (
-              <div className="decoded-image-container">
-                <img
-                  src={decodedImageUrl}
-                  alt="Base32 decoded image"
-                  className="decoded-image"
-                  onLoad={handleImageLoad}
-                  style={{
-                    transform: `scale(${imageScale})`,
-                    transformOrigin: "top left",
-                  }}
-                />
-              </div>
+              <>
+                <div className="image-scale-controls">
+                  <span>Scale:</span>
+                  {[1, 2, 5, 10, 50].map((scale) => (
+                    <button
+                      key={scale}
+                      onClick={() => handleScaleChange(scale)}
+                      className={imageScale === scale ? "active" : ""}
+                    >
+                      {scale}x
+                    </button>
+                  ))}
+                </div>
+                <div className="decoded-image-container">
+                  <img
+                    src={decodedImageUrl}
+                    alt="Base32 decoded image"
+                    className="decoded-image"
+                    style={{
+                      transform: `scale(${imageScale})`,
+                      transformOrigin: "top left",
+                    }}
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
