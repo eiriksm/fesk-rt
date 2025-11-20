@@ -1184,52 +1184,54 @@ export function App() {
               {finalLabel}
             </div>
             <span className="out-row-text decoded-ok">{finalResult.text}</span>
-            {decodedImageUrl && (
-              <>
-                <br />
-                <div className="image-scale-controls">
-                  {imageFormat && (
-                    <span>
-                      <strong>{imageFormat}</strong> •{" "}
-                    </span>
-                  )}
-                  <span>Scale:</span>
-                  {[1, 2, 5, 10, 50].map((scale) => (
-                    <button
-                      key={scale}
-                      onClick={() => handleScaleChange(scale)}
-                      className={imageScale === scale ? "active" : ""}
-                    >
-                      {scale}x
-                    </button>
-                  ))}
-                </div>
-                <div
-                  className="decoded-image-container"
-                  style={
-                    imageDimensions
-                      ? {
-                          width: imageDimensions.width * imageScale,
-                          height: imageDimensions.height * imageScale,
-                        }
-                      : undefined
-                  }
-                >
-                  <img
-                    src={decodedImageUrl}
-                    alt="Base32 decoded image"
-                    className="decoded-image"
-                    onLoad={handleImageLoad}
-                    style={{
-                      transform: `scale(${imageScale})`,
-                      transformOrigin: "top left",
-                    }}
-                  />
-                </div>
-              </>
-            )}
           </div>
         </div>
+        {decodedImageUrl && (
+          <div className="out-row decoded-image-row">
+            <div className="out-row-header">Base32 decoded result</div>
+            <div className="out-row-content">
+              <div className="image-scale-controls">
+                {imageFormat && (
+                  <span>
+                    <strong>{imageFormat}</strong> •{" "}
+                  </span>
+                )}
+                <span>Scale:</span>
+                {[1, 2, 5, 10, 50].map((scale) => (
+                  <button
+                    key={scale}
+                    onClick={() => handleScaleChange(scale)}
+                    className={imageScale === scale ? "active" : ""}
+                  >
+                    {scale}x
+                  </button>
+                ))}
+              </div>
+              <div
+                className="decoded-image-container"
+                style={
+                  imageDimensions
+                    ? {
+                        width: imageDimensions.width * imageScale,
+                        height: imageDimensions.height * imageScale,
+                      }
+                    : undefined
+                }
+              >
+                <img
+                  src={decodedImageUrl}
+                  alt="Base32 decoded image"
+                  className="decoded-image"
+                  onLoad={handleImageLoad}
+                  style={{
+                    transform: `scale(${imageScale})`,
+                    transformOrigin: "top left",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       <footer className="app-footer">
         View the code on{" "}
