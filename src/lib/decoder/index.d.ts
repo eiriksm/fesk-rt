@@ -79,6 +79,19 @@ export interface DecoderEventEmitter {
   ): () => void;
 }
 
+export interface ListenToMicOptions {
+  stream?: MediaStream;
+  constraints?: MediaStreamConstraints;
+  getMediaStream?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
+  suppressReadyStatus?: boolean;
+}
+
+export interface DecodeSampleUrlOptions {
+  label?: string;
+  suppressReadyStatus?: boolean;
+  fetch?: typeof fetch;
+}
+
 export interface FeskDecoderConfig {
   pipelineDefs: PipelineDefinition[];
   pipelineThresholds: Map<string, number>;
@@ -102,12 +115,24 @@ export interface FeskDecoderConfig {
 export interface FeskDecoder {
   config: FeskDecoderConfig;
   events: DecoderEventEmitter;
+  on<K extends keyof DecoderEvents>(
+    event: K,
+    handler: (payload: DecoderEvents[K]) => void,
+  ): () => void;
   prepare(options?: { suppressReadyStatus?: boolean }): Promise<void>;
   waitForReady(): Promise<void>;
-  attachStream(stream: MediaStream): Promise<MediaStreamAudioSourceNode>;
+  attachStream(
+    stream: MediaStream,
+    options?: { suppressReadyStatus?: boolean },
+  ): Promise<MediaStreamAudioSourceNode>;
   attachBuffer(
     buffer: AudioBuffer,
     options?: { label?: string; suppressReadyStatus?: boolean },
+  ): Promise<AudioBufferSourceNode>;
+  listenToMic(options?: ListenToMicOptions): Promise<MediaStream>;
+  decodeSampleUrl(
+    sampleUrl: string,
+    options?: DecodeSampleUrlOptions,
   ): Promise<AudioBufferSourceNode>;
   stop(options?: { status?: string | null }): Promise<void>;
   drainToneLog(): Map<string, number[]>;
