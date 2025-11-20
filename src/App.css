@@ -191,17 +191,17 @@ details.debug-panel summary {
 
 .decoded-image-container {
   margin-top: 1rem;
-  padding: 1rem;
+  padding: 0;
   background: #f9f9f9;
   border: 1px solid #e0e0e0;
   border-radius: 4px;
   display: inline-block;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .decoded-image {
   display: block;
-  border: 1px solid #ddd;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
