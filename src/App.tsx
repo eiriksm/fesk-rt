@@ -1192,9 +1192,12 @@ export function App() {
             <div className="out-row-content">
               <div className="image-scale-controls">
                 {imageFormat && (
-                  <span>
-                    <strong>{imageFormat}</strong> •{" "}
-                  </span>
+                  <>
+                    <span>
+                      <strong>{imageFormat}</strong>
+                    </span>
+                    <br />
+                  </>
                 )}
                 <span>Scale:</span>
                 {[1, 2, 5, 10, 50].map((scale) => (
