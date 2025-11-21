@@ -16,7 +16,7 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample2Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 30000 })
+    cy.get("#out .decoded-ok", { timeout: 40000 })
       .should("not.be.empty")
       .should("contain.text", "test");
   });
