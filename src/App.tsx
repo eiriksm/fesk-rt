@@ -1130,7 +1130,7 @@ export function App() {
                 >
                   Play Sample {id} 🔊
                 </button>
-              )
+              );
             })}
           </div>
           <div className="debug-metrics">
