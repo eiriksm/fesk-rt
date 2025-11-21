@@ -1190,15 +1190,12 @@ export function App() {
           <div className="out-row decoded-image-row">
             <div className="out-row-header">Base32 decoded result</div>
             <div className="out-row-content">
+              {imageFormat && (
+                <div className="image-format">
+                  <strong>{imageFormat}</strong>
+                </div>
+              )}
               <div className="image-scale-controls">
-                {imageFormat && (
-                  <>
-                    <span>
-                      <strong>{imageFormat}</strong>
-                    </span>
-                    <br />
-                  </>
-                )}
                 <span>Scale:</span>
                 {[1, 2, 5, 10, 50].map((scale) => (
                   <button

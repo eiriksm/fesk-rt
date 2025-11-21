@@ -207,8 +207,11 @@ details.debug-panel summary {
   image-rendering: crisp-edges;
 }
 
+.image-format {
+  margin-bottom: 0.5rem;
+}
+
 .image-scale-controls {
-  margin-top: 0.75rem;
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
