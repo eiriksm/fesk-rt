@@ -20,28 +20,7 @@ import {
 import "./App.css";
 
 const SAMPLE_WAV_CONFIG = [
-  { id: "sample1Btn", url: "sample.wav", label: "1" },
-  { id: "sample2Btn", url: "sample2.wav", label: "2" },
-  { id: "sample3Btn", url: "sample32.wav", label: "3" },
-  { id: "sample4Btn", url: "sample4.wav", label: "4" },
-  { id: "sample5Btn", url: "sample-clock-on-laptop.wav", label: "5" },
-  {
-    id: "sample6Btn",
-    url: "sample-clock-recorder-on-phone.wav",
-    label: "6",
-  },
-  { id: "sample7Btn", url: "sample-fast.wav", label: "7" },
-  {
-    id: "sample8Btn",
-    url: "sample-phone-recording-fast.wav",
-    label: "8",
-  },
-  { id: "sample9Btn", url: "sample-uptime-sim.wav", label: "9" },
-  { id: "sample10Btn", url: "sample-from-pr.wav", label: "10" },
-  { id: "sample11Btn", url: "sample-with-newline.wav", label: "11" },
-  { id: "sample12Btn", url: "sample-with-c32.wav", label: "12" },
-  { id: "sample13Btn", url: "sample-with-c32-long.wav", label: "13" },
-  { id: "sample14Btn", url: "sample-uptime-from-c32.wav", label: "14" },
+  { url: "sample1.wav" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
@@ -1012,7 +991,7 @@ export function App() {
         await decoder.waitForReady();
         const labelSuffix = entry.label ? ` ${entry.label}` : "";
         setStatus(`loading sample${labelSuffix}…`);
-        const response = await fetch(entry.url);
+        const response = await fetch(`samples/${entry.url}`);
         if (!response.ok) {
           throw new Error(`fetch failed (${response.status})`);
         }
@@ -1138,16 +1117,19 @@ export function App() {
         <summary>Debug</summary>
         <div className="debug-panel-content">
           <div className="debug-controls">
-            {SAMPLE_WAV_CONFIG.map((entry) => (
-              <button
-                id={entry.id}
-                key={entry.url}
-                onClick={() => handlePlaySample(entry)}
-                disabled={sampleButtonsDisabled}
-              >
-                Play Sample {entry.label} 🔊
-              </button>
-            ))}
+            {SAMPLE_WAV_CONFIG.map((entry, delta: number) => {
+              const id = delta + 1;
+              return (
+                <button
+                  id={`sample${id}Btn`}
+                  key={entry.url}
+                  onClick={() => handlePlaySample(entry)}
+                  disabled={sampleButtonsDisabled}
+                >
+                  Play Sample {id} 🔊
+                </button>
+              )
+            })}
           </div>
           <div className="debug-metrics">
             <div className="debug-metric">
