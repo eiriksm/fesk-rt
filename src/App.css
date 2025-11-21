@@ -188,3 +188,43 @@ details.debug-panel summary {
     white-space: nowrap;
   }
 }
+
+.decoded-image-container {
+  margin-top: 1rem;
+  padding: 0;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  display: inline-block;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.decoded-image {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+.image-format {
+  margin-bottom: 0.5rem;
+}
+
+.image-scale-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.image-scale-controls button {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+  min-width: 50px;
+}
+
+.image-scale-controls button.active {
+  background: #e0e0e0;
+  border-color: #999;
+  font-weight: 600;
+}
