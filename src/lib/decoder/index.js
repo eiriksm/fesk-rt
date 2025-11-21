@@ -9,8 +9,8 @@ const END_MARK_BITS = Array.from(
 );
 
 const DEFAULT_FREQS_SETS = [
-  [2490.2, 3134.8],
-  [7394.0, 9313.0],
+  [2349.32, 2637.02, 2959.96, 3322.44],
+  [2349.32, 2637.02, 2959.96, 3322.44],
 ];
 
 const DEFAULT_BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
@@ -464,10 +464,8 @@ export function createFeskDecoder(overrides = {}) {
     return result;
   }
 
-  function feedOne(dec, symIdx, score) {
+  function feedBit(dec, bit, score) {
     const s = score ?? 0;
-    if (symIdx !== 0 && symIdx !== 1) return null;
-    const bit = symIdx & 1;
 
     if (dec.state === "hunt") {
       dec.recentBits = ((dec.recentBits << 1) | bit) & START_END_MASK;
@@ -542,6 +540,17 @@ export function createFeskDecoder(overrides = {}) {
       if (candidate) publishPreviewCandidate(dec, candidate);
     }
     return null;
+  }
+
+  function feedOne(dec, symIdx, score) {
+    // FESK4: symbol index 0-3 encodes 2 bits
+    if (symIdx < 0 || symIdx > 3) return null;
+    const bit0 = (symIdx >> 1) & 1;  // MSB
+    const bit1 = symIdx & 1;          // LSB
+    // Feed both bits in sequence
+    const result0 = feedBit(dec, bit0, score);
+    if (result0) return result0;
+    return feedBit(dec, bit1, score);
   }
 
   function allPipelinesReady() {
