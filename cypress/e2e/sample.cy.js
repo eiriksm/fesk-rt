@@ -18,6 +18,9 @@ describe("FESK real time with known samples", () => {
     cy.get("#sample2Btn").click();
     cy.get("#out .decoded-ok", { timeout: 40000 })
       .should("not.be.empty")
-      .should("contain.text", "test");
+      .should("contain.text", "kjeumrr2aaaaav2fijifmubyeaxaaaaa2aaqbhibfiaqaaiaajadqjnaaj2luapyaab3aah65ohf77ec4wc5ovs77vhd6jy7soh6wkaaaa");
+
+    // This thing is also a webp image, check that too.
+    cy.get('.decoded-image-row .image-format').should('be.visible').and('have.text', 'WebP');
   });
 });
