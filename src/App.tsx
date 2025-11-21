@@ -405,6 +405,13 @@ export function App() {
     pipelineKey: string | null;
     text: string;
   }>({ pipelineKey: null, text: "" });
+  const [decodedImageUrl, setDecodedImageUrl] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState<number>(1);
+  const [imageFormat, setImageFormat] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [recordedWavBlob, setRecordedWavBlob] = useState<Blob | null>(null);
   const [downloadPreparing, setDownloadPreparing] = useState(false);
   const [runMode, setRunMode] = useState<"idle" | "microphone" | "sample">(
@@ -619,6 +626,13 @@ export function App() {
       dispatchCandidates({ type: "reset" });
       if (resetFinalResult) {
         setFinalResult({ pipelineKey: null, text: "" });
+        setDecodedImageUrl((prevUrl) => {
+          if (prevUrl) URL.revokeObjectURL(prevUrl);
+          return null;
+        });
+        setImageScale(1);
+        setImageFormat(null);
+        setImageDimensions(null);
       }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
@@ -735,6 +749,81 @@ export function App() {
     [handleSamplePlaybackEnded],
   );
 
+  const tryDecodeAsBase32Image = useCallback(
+    (text: string): { url: string; format: string } | null => {
+      try {
+        // RFC 4648 base32 alphabet
+        const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        const normalized = text.toUpperCase().replace(/[=\s]/g, "");
+
+        // Validate base32 characters
+        for (let i = 0; i < normalized.length; i++) {
+          if (!base32Alphabet.includes(normalized[i])) {
+            return null;
+          }
+        }
+
+        // Decode base32
+        const bytes: number[] = [];
+        let bits = 0;
+        let value = 0;
+
+        for (let i = 0; i < normalized.length; i++) {
+          const char = normalized[i];
+          const index = base32Alphabet.indexOf(char);
+          if (index === -1) return null;
+
+          value = (value << 5) | index;
+          bits += 5;
+
+          if (bits >= 8) {
+            bytes.push((value >>> (bits - 8)) & 0xff);
+            bits -= 8;
+          }
+        }
+
+        if (bytes.length === 0) return null;
+
+        // Check for PNG signature (89 50 4E 47 0D 0A 1A 0A)
+        const hasPNGSignature =
+          bytes.length >= 8 &&
+          bytes[0] === 0x89 &&
+          bytes[1] === 0x50 &&
+          bytes[2] === 0x4e &&
+          bytes[3] === 0x47 &&
+          bytes[4] === 0x0d &&
+          bytes[5] === 0x0a &&
+          bytes[6] === 0x1a &&
+          bytes[7] === 0x0a;
+
+        // Check for WebP signature (RIFF....WEBP)
+        const hasWebPSignature =
+          bytes.length >= 12 &&
+          bytes[0] === 0x52 &&
+          bytes[1] === 0x49 &&
+          bytes[2] === 0x46 &&
+          bytes[3] === 0x46 && // "RIFF"
+          bytes[8] === 0x57 &&
+          bytes[9] === 0x45 &&
+          bytes[10] === 0x42 &&
+          bytes[11] === 0x50; // "WEBP"
+
+        if (!hasPNGSignature && !hasWebPSignature) return null;
+
+        // Create blob and data URL with appropriate MIME type
+        const format = hasPNGSignature ? "PNG" : "WebP";
+        const mimeType = hasPNGSignature ? "image/png" : "image/webp";
+        const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        return { url, format };
+      } catch (err) {
+        console.debug("Base32 decode failed:", err);
+        return null;
+      }
+    },
+    [],
+  );
+
   const handlePreviewEvent = useCallback((payload: DecoderPreviewEvent) => {
     if (!payload?.pipelineKey) return;
     const pipelineKey: string = payload.pipelineKey;
@@ -782,6 +871,28 @@ export function App() {
         }
         dispatchCandidates({ type: "update", pipelineKey, patch });
         setFinalResult({ pipelineKey, text: result.text });
+
+        // Attempt base32 decode as image
+        const imageResult = tryDecodeAsBase32Image(result.text);
+        if (imageResult) {
+          console.info(
+            `[${label}] Base32 decoded as ${imageResult.format} image`,
+          );
+          // Revoke old URL to prevent memory leak
+          setDecodedImageUrl((prevUrl) => {
+            if (prevUrl) URL.revokeObjectURL(prevUrl);
+            return imageResult.url;
+          });
+          setImageFormat(imageResult.format);
+        } else {
+          setDecodedImageUrl((prevUrl) => {
+            if (prevUrl) URL.revokeObjectURL(prevUrl);
+            return null;
+          });
+          setImageFormat(null);
+          setImageScale(1);
+          setImageDimensions(null);
+        }
       } else if (pipelineKey) {
         const patch: CandidatePatch = {
           provisional: true,
@@ -814,7 +925,14 @@ export function App() {
         console.warn(`[${label}] frame decode fail`);
       }
     },
-    [dispatchCandidates, isBusy, pipelineByKey, runMode, triggerAutoStop],
+    [
+      dispatchCandidates,
+      isBusy,
+      pipelineByKey,
+      runMode,
+      triggerAutoStop,
+      tryDecodeAsBase32Image,
+    ],
   );
 
   const handleStart = useCallback(async () => {
@@ -942,6 +1060,21 @@ export function App() {
     });
   }, [recordedWavBlob]);
 
+  const handleScaleChange = useCallback((scale: number) => {
+    setImageScale(scale);
+  }, []);
+
+  const handleImageLoad = useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const img = event.currentTarget;
+      setImageDimensions({
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
+    },
+    [],
+  );
+
   useEffect(() => {
     const offState = decoder.events.on("state", handleStateEvent);
     const offPreview = decoder.events.on("preview", handlePreviewEvent);
@@ -1053,6 +1186,52 @@ export function App() {
             <span className="out-row-text decoded-ok">{finalResult.text}</span>
           </div>
         </div>
+        {decodedImageUrl && (
+          <div className="out-row decoded-image-row">
+            <div className="out-row-header">Base32 decoded result</div>
+            <div className="out-row-content">
+              {imageFormat && (
+                <div className="image-format">
+                  <strong>{imageFormat}</strong>
+                </div>
+              )}
+              <div className="image-scale-controls">
+                <span>Scale:</span>
+                {[1, 2, 5, 10, 50].map((scale) => (
+                  <button
+                    key={scale}
+                    onClick={() => handleScaleChange(scale)}
+                    className={imageScale === scale ? "active" : ""}
+                  >
+                    {scale}x
+                  </button>
+                ))}
+              </div>
+              <div
+                className="decoded-image-container"
+                style={
+                  imageDimensions
+                    ? {
+                        width: imageDimensions.width * imageScale,
+                        height: imageDimensions.height * imageScale,
+                      }
+                    : undefined
+                }
+              >
+                <img
+                  src={decodedImageUrl}
+                  alt="Base32 decoded image"
+                  className="decoded-image"
+                  onLoad={handleImageLoad}
+                  style={{
+                    transform: `scale(${imageScale})`,
+                    transformOrigin: "top left",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       <footer className="app-footer">
         View the code on{" "}
