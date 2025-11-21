@@ -983,14 +983,14 @@ export function App() {
   ]);
 
   const handlePlaySample = useCallback(
-    async (entry: (typeof SAMPLE_WAV_CONFIG)[number]) => {
+    async (entry: (typeof SAMPLE_WAV_CONFIG)[number], delta: number) => {
       if (isBusy || runMode !== "idle") return;
       setIsBusy(true);
       try {
         await cleanup(null, { resetFinalResult: true });
         await decoder.prepare({ suppressReadyStatus: true });
         await decoder.waitForReady();
-        const labelSuffix = entry.label ? ` ${entry.label}` : "";
+        const labelSuffix = delta + 1;
         setStatus(`loading sample${labelSuffix}…`);
         const response = await fetch(`samples/${entry.url}`);
         if (!response.ok) {
@@ -1009,7 +1009,8 @@ export function App() {
           throw new Error("empty or unsupported WAV payload");
         }
         const playbackBuffer = toMonoBuffer(audioCtxInstance, audioBuffer);
-        await decoder.attachBuffer(playbackBuffer, { label: entry.label });
+        const label = `Sample ${labelSuffix}`;
+        await decoder.attachBuffer(playbackBuffer, { label });
         pipelineDefs.forEach((def) => {
           console.info(`[${def.label}] sample input connected`);
         });
@@ -1124,7 +1125,7 @@ export function App() {
                 <button
                   id={`sample${id}Btn`}
                   key={entry.url}
-                  onClick={() => handlePlaySample(entry)}
+                  onClick={() => handlePlaySample(entry, delta)}
                   disabled={sampleButtonsDisabled}
                 >
                   Play Sample {id} 🔊
