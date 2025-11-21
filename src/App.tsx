@@ -1009,7 +1009,7 @@ export function App() {
           throw new Error("empty or unsupported WAV payload");
         }
         const playbackBuffer = toMonoBuffer(audioCtxInstance, audioBuffer);
-        const label = `Sample ${labelSuffix}`;
+        const label = `${labelSuffix}`;
         await decoder.attachBuffer(playbackBuffer, { label });
         pipelineDefs.forEach((def) => {
           console.info(`[${def.label}] sample input connected`);
