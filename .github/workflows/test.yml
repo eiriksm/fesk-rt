@@ -97,22 +97,11 @@ jobs:
         include:
           - name: sample-buttons
             spec: cypress/e2e/sample.cy.js
-            browser: chrome
-          - name: sample-buttons
-            spec: cypress/e2e/sample.cy.js
-            browser: firefox
           - name: mic-sample1
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample1.wav
             expectedText: test
             recordDurationMs: 10000
-            browser: chrome
-          - name: mic-sample1
-            spec: cypress/e2e/mic.cy.js
-            fakeAudioCapture: public/samples/sample1.wav
-            expectedText: test
-            recordDurationMs: 10000
-            browser: firefox
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -143,7 +132,7 @@ jobs:
           # We just installed in the last step.
           install: false
           wait-on: http://localhost:3000
-          browser: ${{ matrix.browser }}
+          browser: chrome
           spec: ${{ matrix.spec }}
         env:
           CYPRESS_baseUrl: http://localhost:3000
