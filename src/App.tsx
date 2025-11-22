@@ -940,8 +940,6 @@ export function App() {
     setIsBusy(true);
     try {
       await cleanup(null, { resetFinalResult: true });
-      await decoder.prepare();
-      await decoder.waitForReady();
       setStatus("requesting microphone…");
       // Chrome mobile often ignores standard constraints, so we include Chrome-specific flags
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -965,8 +963,9 @@ export function App() {
       });
       mediaStreamRef.current = stream;
 
-      // Log actual audio constraints applied
+      // Log actual audio constraints applied and get sample rate
       const audioTrack = stream.getAudioTracks()[0];
+      let streamSampleRate = 48000; // fallback
       if (audioTrack) {
         const settings = audioTrack.getSettings();
         console.info("Audio track settings:", {
@@ -976,8 +975,14 @@ export function App() {
           sampleRate: settings.sampleRate,
           channelCount: settings.channelCount,
         });
+        if (settings.sampleRate) {
+          streamSampleRate = settings.sampleRate;
+        }
       }
 
+      // Prepare decoder with the stream's sample rate
+      await decoder.prepare({ sampleRate: streamSampleRate });
+      await decoder.waitForReady();
       await decoder.attachStream(stream);
       pipelineDefs.forEach((def) => {
         console.info(`[${def.label}] microphone connected`);
@@ -1008,8 +1013,6 @@ export function App() {
       setIsBusy(true);
       try {
         await cleanup(null, { resetFinalResult: true });
-        await decoder.prepare({ suppressReadyStatus: true });
-        await decoder.waitForReady();
         const labelSuffix = entry.label ? ` ${entry.label}` : "";
         setStatus(`loading sample${labelSuffix}…`);
         const response = await fetch(entry.url);
@@ -1017,6 +1020,34 @@ export function App() {
           throw new Error(`fetch failed (${response.status})`);
         }
         const arrayBuffer = await response.arrayBuffer();
+
+        // Create temporary AudioContext to decode the file and get its sample rate
+        const AudioContextCtor =
+          window.AudioContext ||
+          (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!AudioContextCtor) {
+          throw new Error("AudioContext not supported");
+        }
+        const tempCtx = new AudioContextCtor();
+        let fileSampleRate = 48000; // fallback
+        try {
+          const tempBuffer = await decodeAudioDataBuffer(tempCtx, arrayBuffer);
+          if (tempBuffer) {
+            fileSampleRate = tempBuffer.sampleRate;
+          }
+        } finally {
+          try {
+            await tempCtx.close();
+          } catch {
+            // ignore
+          }
+        }
+
+        // Prepare decoder with the file's sample rate
+        await decoder.prepare({ suppressReadyStatus: true, sampleRate: fileSampleRate });
+        await decoder.waitForReady();
+
         const audioCtxInstance = decoder.getAudioContext();
         if (!audioCtxInstance) {
           throw new Error("audio context not ready");

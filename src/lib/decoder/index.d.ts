@@ -102,7 +102,7 @@ export interface FeskDecoderConfig {
 export interface FeskDecoder {
   config: FeskDecoderConfig;
   events: DecoderEventEmitter;
-  prepare(options?: { suppressReadyStatus?: boolean }): Promise<void>;
+  prepare(options?: { suppressReadyStatus?: boolean; sampleRate?: number }): Promise<void>;
   waitForReady(): Promise<void>;
   attachStream(stream: MediaStream): Promise<MediaStreamAudioSourceNode>;
   attachBuffer(

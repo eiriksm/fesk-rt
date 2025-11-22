@@ -728,9 +728,10 @@ export function createFeskDecoder(overrides = {}) {
     toneLog.clear();
     emitState({ kind: "status", status: "initializing audio…" });
 
+    const sampleRate = options?.sampleRate || 48000;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)({
       latencyHint: "interactive",
-      sampleRate: 48000,
+      sampleRate: sampleRate,
     });
     emitState({ kind: "sample-rate", sampleRate: audioCtx.sampleRate });
 
