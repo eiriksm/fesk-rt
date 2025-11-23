@@ -733,6 +733,10 @@ export function createFeskDecoder(overrides = {}) {
       latencyHint: "interactive",
       sampleRate: sampleRate,
     });
+    console.info(`AudioContext created - requested: ${sampleRate} Hz, actual: ${audioCtx.sampleRate} Hz`);
+    if (sampleRate !== audioCtx.sampleRate) {
+      console.warn(`AudioContext sample rate mismatch! Requested ${sampleRate} Hz but got ${audioCtx.sampleRate} Hz`);
+    }
     emitState({ kind: "sample-rate", sampleRate: audioCtx.sampleRate });
 
     const workletModuleUrl = resolveWorkletModuleUrl(config.workletUrl);
@@ -804,11 +808,18 @@ export function createFeskDecoder(overrides = {}) {
         mediaSrc.disconnect();
       } catch {}
     }
+    console.info(`Creating MediaStreamSource - AudioContext sample rate: ${audioCtx.sampleRate} Hz`);
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length > 0) {
+      const trackSettings = audioTracks[0].getSettings();
+      console.info(`Stream audio track sample rate: ${trackSettings.sampleRate} Hz`);
+    }
     mediaSrc = audioCtx.createMediaStreamSource(stream);
     // Force mono output for Chrome mobile compatibility
     mediaSrc.channelCount = 1;
     mediaSrc.channelCountMode = "explicit";
     mediaSrc.channelInterpretation = "speakers";
+    console.info(`MediaStreamSource created successfully`);
     connectNodeToPipelines(mediaSrc, "mic");
     for (const state of pipelineStates.values()) {
       emitState({

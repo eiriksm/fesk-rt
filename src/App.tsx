@@ -942,13 +942,13 @@ export function App() {
       await cleanup(null, { resetFinalResult: true });
       setStatus("requesting microphone…");
       // Chrome mobile often ignores standard constraints, so we include Chrome-specific flags
+      // Note: Don't specify sampleRate constraint to avoid cross-sample-rate issues in Firefox
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
           channelCount: { exact: 1 },
-          sampleRate: { exact: 48000 },
           // Chrome-specific flags (not in standard MediaTrackConstraints)
           googEchoCancellation: false,
           googNoiseSuppression: false,
@@ -977,10 +977,14 @@ export function App() {
         });
         if (settings.sampleRate) {
           streamSampleRate = settings.sampleRate;
+          console.info(`Using detected stream sample rate: ${streamSampleRate} Hz`);
+        } else {
+          console.warn(`Could not detect stream sample rate, using fallback: ${streamSampleRate} Hz`);
         }
       }
 
       // Prepare decoder with the stream's sample rate
+      console.info(`Creating AudioContext with sample rate: ${streamSampleRate} Hz`);
       await decoder.prepare({ sampleRate: streamSampleRate });
       await decoder.waitForReady();
       await decoder.attachStream(stream);
