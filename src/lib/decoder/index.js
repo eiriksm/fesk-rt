@@ -728,13 +728,17 @@ export function createFeskDecoder(overrides = {}) {
     toneLog.clear();
     emitState({ kind: "status", status: "initializing audio…" });
 
-    const sampleRate = options?.sampleRate || 48000;
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-      latencyHint: "interactive",
-      sampleRate: sampleRate,
-    });
-    console.info(`AudioContext created - requested: ${sampleRate} Hz, actual: ${audioCtx.sampleRate} Hz`);
-    if (sampleRate !== audioCtx.sampleRate) {
+    const sampleRate = options?.sampleRate;
+    const audioCtxOptions = { latencyHint: "interactive" };
+    if (sampleRate) {
+      audioCtxOptions.sampleRate = sampleRate;
+      console.info(`Creating AudioContext with requested sample rate: ${sampleRate} Hz`);
+    } else {
+      console.info("Creating AudioContext with browser default sample rate");
+    }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)(audioCtxOptions);
+    console.info(`AudioContext created - actual sample rate: ${audioCtx.sampleRate} Hz`);
+    if (sampleRate && sampleRate !== audioCtx.sampleRate) {
       console.warn(`AudioContext sample rate mismatch! Requested ${sampleRate} Hz but got ${audioCtx.sampleRate} Hz`);
     }
     emitState({ kind: "sample-rate", sampleRate: audioCtx.sampleRate });
