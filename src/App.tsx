@@ -1022,8 +1022,11 @@ export function App() {
         // Create temporary AudioContext to decode the file and get its sample rate
         const AudioContextCtor =
           window.AudioContext ||
-          (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-            .webkitAudioContext;
+          (
+            window as typeof window & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+          ).webkitAudioContext;
         if (!AudioContextCtor) {
           throw new Error("AudioContext not supported");
         }
@@ -1043,7 +1046,10 @@ export function App() {
         }
 
         // Prepare decoder with the file's sample rate
-        await decoder.prepare({ suppressReadyStatus: true, sampleRate: fileSampleRate });
+        await decoder.prepare({
+          suppressReadyStatus: true,
+          sampleRate: fileSampleRate,
+        });
         await decoder.waitForReady();
 
         const audioCtxInstance = decoder.getAudioContext();
