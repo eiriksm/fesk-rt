@@ -1,5 +1,5 @@
 const CODE_BITS = 6;
-const CRC_BITS = 8;
+const CRC_BITS = 9;  // CRC is 8 bits + 1 padding bit (transmitted as 3 tribits)
 const START_CODE = 62;
 const END_CODE = 63;
 const START_END_MASK = (1 << CODE_BITS) - 1;
@@ -9,8 +9,8 @@ const END_MARK_BITS = Array.from(
 );
 
 const DEFAULT_FREQS_SETS = [
-  [2349.32, 2637.02, 2959.96, 3322.44],
-  [2349.32, 2637.02, 2959.96, 3322.44],
+  [2093, 2217, 2349, 2489, 2637, 2794, 2960, 3136],
+  [2093, 2217, 2349, 2489, 2637, 2794, 2960, 3136],
 ];
 
 const DEFAULT_BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
@@ -279,6 +279,7 @@ export function createFeskDecoder(overrides = {}) {
       previewActive: false,
       pipelineKey,
       label,
+      lastHuntTribit: null,
     };
   }
 
@@ -430,9 +431,9 @@ export function createFeskDecoder(overrides = {}) {
       return r;
     }
     const payloadCodes = bitsToCodes(dec.frameBits, payloadBitLength);
-    const recvCrc = bitsToByte(
-      dec.frameBits.slice(payloadBitLength, payloadBitLength + CRC_BITS),
-    );
+    // CRC is 9 bits (3 tribits), but only first 8 bits are actual CRC (last bit is padding)
+    const crcBits = dec.frameBits.slice(payloadBitLength, payloadBitLength + CRC_BITS);
+    const recvCrc = bitsToByte(crcBits.slice(0, 8));  // Ignore padding bit
     const wantCrc = crc8ATM(payloadCodes);
     const okCRC = recvCrc === wantCrc;
 
@@ -543,14 +544,17 @@ export function createFeskDecoder(overrides = {}) {
   }
 
   function feedOne(dec, symIdx, score) {
-    // FESK4: symbol index 0-3 encodes 2 bits
-    if (symIdx < 0 || symIdx > 3) return null;
-    const bit0 = (symIdx >> 1) & 1;  // MSB
-    const bit1 = symIdx & 1;          // LSB
-    // Feed both bits in sequence
-    const result0 = feedBit(dec, bit0, score);
-    if (result0) return result0;
-    return feedBit(dec, bit1, score);
+    // FESK8: symbol index 0-7 encodes 3 bits
+    if (symIdx < 0 || symIdx > 7) return null;
+    const bit0 = (symIdx >> 2) & 1;  // MSB
+    const bit1 = (symIdx >> 1) & 1;  // Middle bit
+    const bit2 = symIdx & 1;          // LSB
+    // Feed all three bits in sequence
+    let result = feedBit(dec, bit0, score);
+    if (result) return result;
+    result = feedBit(dec, bit1, score);
+    if (result) return result;
+    return feedBit(dec, bit2, score);
   }
 
   function allPipelinesReady() {
