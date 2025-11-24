@@ -737,10 +737,19 @@ export function createFeskDecoder(overrides = {}) {
     toneLog.clear();
     emitState({ kind: "status", status: "initializing audio…" });
 
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-      latencyHint: "interactive",
-      sampleRate: 48000,
-    });
+    const sampleRate = options?.sampleRate;
+    const audioCtxOptions = { latencyHint: "interactive" };
+    if (sampleRate) {
+      audioCtxOptions.sampleRate = sampleRate;
+      console.info(`Creating AudioContext with requested sample rate: ${sampleRate} Hz`);
+    } else {
+      console.info("Creating AudioContext with browser default sample rate");
+    }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)(audioCtxOptions);
+    console.info(`AudioContext created - actual sample rate: ${audioCtx.sampleRate} Hz`);
+    if (sampleRate && sampleRate !== audioCtx.sampleRate) {
+      console.warn(`AudioContext sample rate mismatch! Requested ${sampleRate} Hz but got ${audioCtx.sampleRate} Hz`);
+    }
     emitState({ kind: "sample-rate", sampleRate: audioCtx.sampleRate });
 
     const workletModuleUrl = resolveWorkletModuleUrl(config.workletUrl);
@@ -812,11 +821,18 @@ export function createFeskDecoder(overrides = {}) {
         mediaSrc.disconnect();
       } catch {}
     }
+    console.info(`Creating MediaStreamSource - AudioContext sample rate: ${audioCtx.sampleRate} Hz`);
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length > 0) {
+      const trackSettings = audioTracks[0].getSettings();
+      console.info(`Stream audio track sample rate: ${trackSettings.sampleRate} Hz`);
+    }
     mediaSrc = audioCtx.createMediaStreamSource(stream);
     // Force mono output for Chrome mobile compatibility
     mediaSrc.channelCount = 1;
     mediaSrc.channelCountMode = "explicit";
     mediaSrc.channelInterpretation = "speakers";
+    console.info(`MediaStreamSource created successfully`);
     connectNodeToPipelines(mediaSrc, "mic");
     for (const state of pipelineStates.values()) {
       emitState({

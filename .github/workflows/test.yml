@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Select the node version
         uses: actions/setup-node@v6
@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Select the node version
         uses: actions/setup-node@v6
@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Select the node version
         uses: actions/setup-node@v6
@@ -74,7 +74,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Select the node version
         uses: actions/setup-node@v6
@@ -104,7 +104,7 @@ jobs:
             recordDurationMs: 10000
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Select the node version
         uses: actions/setup-node@v6

@@ -920,17 +920,15 @@ export function App() {
     setIsBusy(true);
     try {
       await cleanup(null, { resetFinalResult: true });
-      await decoder.prepare();
-      await decoder.waitForReady();
       setStatus("requesting microphone…");
       // Chrome mobile often ignores standard constraints, so we include Chrome-specific flags
+      // Note: Don't specify sampleRate constraint to avoid cross-sample-rate issues in Firefox
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
           channelCount: { exact: 1 },
-          sampleRate: { exact: 48000 },
           // Chrome-specific flags (not in standard MediaTrackConstraints)
           googEchoCancellation: false,
           googNoiseSuppression: false,
@@ -945,7 +943,7 @@ export function App() {
       });
       mediaStreamRef.current = stream;
 
-      // Log actual audio constraints applied
+      // Log actual audio constraints applied and get sample rate
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
         const settings = audioTrack.getSettings();
@@ -958,6 +956,11 @@ export function App() {
         });
       }
 
+      // Prepare decoder without specifying sample rate - let browser use hardware default
+      // This ensures AudioContext matches the MediaStream's native sample rate
+      console.info("Creating AudioContext with browser default sample rate");
+      await decoder.prepare();
+      await decoder.waitForReady();
       await decoder.attachStream(stream);
       pipelineDefs.forEach((def) => {
         console.info(`[${def.label}] microphone connected`);
@@ -988,8 +991,6 @@ export function App() {
       setIsBusy(true);
       try {
         await cleanup(null, { resetFinalResult: true });
-        await decoder.prepare({ suppressReadyStatus: true });
-        await decoder.waitForReady();
         const labelSuffix = delta + 1;
         setStatus(`loading sample${labelSuffix}…`);
         const response = await fetch(`samples/${entry.url}`);
@@ -997,6 +998,40 @@ export function App() {
           throw new Error(`fetch failed (${response.status})`);
         }
         const arrayBuffer = await response.arrayBuffer();
+
+        // Create temporary AudioContext to decode the file and get its sample rate
+        const AudioContextCtor =
+          window.AudioContext ||
+          (
+            window as typeof window & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+          ).webkitAudioContext;
+        if (!AudioContextCtor) {
+          throw new Error("AudioContext not supported");
+        }
+        const tempCtx = new AudioContextCtor();
+        let fileSampleRate = 48000; // fallback
+        try {
+          const tempBuffer = await decodeAudioDataBuffer(tempCtx, arrayBuffer);
+          if (tempBuffer) {
+            fileSampleRate = tempBuffer.sampleRate;
+          }
+        } finally {
+          try {
+            await tempCtx.close();
+          } catch {
+            // ignore
+          }
+        }
+
+        // Prepare decoder with the file's sample rate
+        await decoder.prepare({
+          suppressReadyStatus: true,
+          sampleRate: fileSampleRate,
+        });
+        await decoder.waitForReady();
+
         const audioCtxInstance = decoder.getAudioContext();
         if (!audioCtxInstance) {
           throw new Error("audio context not ready");
