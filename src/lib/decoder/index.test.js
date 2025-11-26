@@ -24,8 +24,8 @@ describe("decoder internals", () => {
     const config = DEFAULT_FESK_DECODER_CONFIG;
 
     expect(config.freqSets).toEqual([
-      [2093, 2217, 2349, 2489, 2637, 2794, 2960, 3136],
-      [2093, 2217, 2349, 2489, 2637, 2794, 2960, 3136],
+      [2349.32, 2637.02, 2959.96, 3322.44],
+      [2349.32, 2637.02, 2959.96, 3322.44],
     ]);
 
     expect(config.detectorConfig).toHaveLength(2);
@@ -148,46 +148,5 @@ describe("decoder internals", () => {
     expect(thresholds.get("bank-0-gain0")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-0-gain1")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.25, 5);
-  });
-
-  it("decodes tone sequence: 7 6 2 3 0 4 2 2 2 3 4 0 6 7 7", () => {
-    // Tone sequence from transmission: [start] [payload+CRC] [end]
-    // Start marker: 7 6 = tribits 111 110 = code 62
-    // End marker: 7 7 = tribits 111 111 = code 63
-    // Payload + CRC: 2 3 0 4 2 2 2 3 4 0 6 = 11 tribits
-
-    // Convert tribits to bits
-    const tribitsToBits = (tribits) => {
-      return tribits.flatMap(t => [
-        (t >> 2) & 1, // MSB
-        (t >> 1) & 1, // Middle
-        t & 1,        // LSB
-      ]);
-    };
-
-    // Payload tribits (first 8 tribits = 4 codes of 6 bits each)
-    const payloadTribits = [2, 3, 0, 4, 2, 2, 2, 3];
-    const payloadBits = tribitsToBits(payloadTribits);
-    const payloadCodes = bitsToCodes(payloadBits);
-
-    // Should decode to valid text
-    const decoded = decodeCodes(payloadCodes);
-    expect(decoded.ok).toBe(true);
-    expect(decoded.text).toBeTruthy();
-
-    // CRC tribits (last 3 tribits encode 8-bit CRC)
-    const crcTribits = [4, 0, 6];
-    // Tribit 1 (4 = 100): CRC bits 7-5
-    // Tribit 2 (0 = 000): CRC bits 4-2
-    // Tribit 3 (6 = 110): CRC bits 1-0 left-shifted (b1 b0 0)
-    const expectedCrc = (4 << 5) | (0 << 2) | (6 >> 1);
-
-    // Verify CRC matches
-    const actualCrc = crc8ATM(payloadCodes);
-    expect(actualCrc).toBe(expectedCrc);
-
-    console.log('Decoded text:', decoded.text);
-    console.log('Payload codes:', payloadCodes);
-    console.log('Expected CRC:', expectedCrc, 'Actual CRC:', actualCrc);
   });
 });
