@@ -22,6 +22,8 @@ import "./App.css";
 const SAMPLE_WAV_CONFIG = [
   { url: "sample1.wav" },
   { url: "sample2.wav" },
+  { url: "sample3.wav" },
+  { url: "sample4.wav" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
