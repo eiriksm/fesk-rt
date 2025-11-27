@@ -13,8 +13,6 @@ const DEFAULT_FREQS_SETS = [
   [2349.32, 2637.02, 2959.96, 3322.44],
 ];
 
-const DEFAULT_BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
-
 const DEFAULT_ENERGY = {
   floor: 5e-7,
   on: 6e-4,
@@ -68,8 +66,7 @@ function createEmitter() {
   };
 }
 
-function bankLabel(idx, overrides = DEFAULT_BANK_LABEL_OVERRIDES) {
-  if (overrides.has(idx)) return overrides.get(idx);
+function bankLabel(idx) {
   if (idx >= 0 && idx < 26) return String.fromCharCode(65 + idx);
   return String(idx + 1);
 }
@@ -90,7 +87,6 @@ function buildDetectorConfig(freqSets) {
 
 function buildPipelineDefs(freqSets, options = {}) {
   const {
-    bankLabelOverrides = DEFAULT_BANK_LABEL_OVERRIDES,
     micBase = DEFAULT_GAIN_CONFIG.micBase,
     sampleBase = DEFAULT_GAIN_CONFIG.sampleBase,
     gainMultipliers = DEFAULT_GAIN_CONFIG.gainMultipliers,
@@ -98,7 +94,7 @@ function buildPipelineDefs(freqSets, options = {}) {
 
   const defs = [];
   freqSets.forEach((_, idx) => {
-    const baseLabel = bankLabel(idx, bankLabelOverrides);
+    const baseLabel = bankLabel(idx);
     gainMultipliers.forEach((multiplier, gainIdx) => {
       const isBase = multiplier === 1;
       const gainLabel = isBase ? "" : ` ×${multiplier}`;
