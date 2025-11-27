@@ -35,7 +35,7 @@ describe("FESK real time with known samples", () => {
     cy.get("#sample3Btn").click();
     cy.get("#out .decoded-ok", { timeout: 8000 })
       .should("not.be.empty")
-      .should("contain.text", "test");
+      .should("contain.text", "uptime 408 seconds");
   });
 
   it("should decode audio from sample 4", () => {

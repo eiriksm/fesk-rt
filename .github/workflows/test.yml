@@ -110,7 +110,7 @@ jobs:
           - name: mic-sample3
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample3.wav
-            expectedText: test
+            expectedText: uptime 408 seconds
             recordDurationMs: 7000
           - name: mic-sample4
             spec: cypress/e2e/mic.cy.js
