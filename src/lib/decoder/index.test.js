@@ -24,8 +24,8 @@ describe("decoder internals", () => {
     const config = DEFAULT_FESK_DECODER_CONFIG;
 
     expect(config.freqSets).toEqual([
-      [2490.2, 3134.8],
-      [7394, 9313],
+      [2349.32, 2637.02, 2959.96, 3322.44],
+      [2349.32, 2637.02, 2959.96, 3322.44],
     ]);
 
     expect(config.detectorConfig).toHaveLength(2);
