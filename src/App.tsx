@@ -467,7 +467,10 @@ export function App() {
   const previewCandidate =
     candidateState.displayedKey &&
     candidateState.candidates.get(candidateState.displayedKey || "");
-  const previewText = previewCandidate?.text ?? "";
+  const previewFallback = status === "idle"
+    ? "Waiting for live audio…"
+    : status || "Listening…";
+  const previewText = previewCandidate?.text ?? previewFallback;
   const previewLabel =
     debugMode && previewCandidate
       ? pipelineByKey.get(previewCandidate.pipelineKey)?.label ||
@@ -626,21 +629,6 @@ export function App() {
     setPipelineStatuses(createInitialDisplayMap(pipelineDefs));
   }, [pipelineDefs]);
 
-  const handleModulationChange = useCallback(
-    async (nextMode: ModulationMode) => {
-      if (nextMode === modulation) return;
-      setIsBusy(true);
-      try {
-        await cleanup("mode changed", { resetFinalResult: true });
-        setDecoder(createDecoderForMode(nextMode));
-        setModulation(nextMode);
-      } finally {
-        setIsBusy(false);
-      }
-    },
-    [cleanup, modulation, setDecoder],
-  );
-
   const cleanup = useCallback(
     async (
       nextStatus?: string | null,
@@ -675,6 +663,21 @@ export function App() {
       setStatus(nextStatus ?? "idle");
     },
     [decoder, dispatchCandidates, resetDisplays, setFinalResult, stopRecording],
+  );
+
+  const handleModulationChange = useCallback(
+    async (nextMode: ModulationMode) => {
+      if (nextMode === modulation) return;
+      setIsBusy(true);
+      try {
+        await cleanup("mode changed", { resetFinalResult: true });
+        setDecoder(createDecoderForMode(nextMode));
+        setModulation(nextMode);
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [cleanup, modulation, setDecoder],
   );
 
   const logTones = useCallback(() => {
@@ -1040,6 +1043,15 @@ export function App() {
     runMode,
     setupRecorder,
   ]);
+
+  useEffect(() => {
+    if (isBusy || runMode !== "idle") return;
+    handleStart().catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Auto-start failed", err);
+      setStatus(`auto-start failed: ${message}`);
+    });
+  }, [handleStart, isBusy, runMode]);
 
   const handlePlaySample = useCallback(
     async (entry: (typeof SAMPLE_WAV_CONFIG)[number], delta: number) => {
