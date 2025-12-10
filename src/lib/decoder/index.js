@@ -8,10 +8,14 @@ const END_MARK_BITS = Array.from(
   (_, i) => (END_CODE >> (CODE_BITS - 1 - i)) & 1,
 );
 
-const DEFAULT_FREQS_SETS = [
+const DEFAULT_FREQS_SETS_4FSK = [
   [2349.32, 2637.02, 2959.96, 3322.44],
   [2349.32, 2637.02, 2959.96, 3322.44],
 ];
+
+const DEFAULT_FREQS_SETS_BFSK = DEFAULT_FREQS_SETS_4FSK.map((set) => set.slice(0, 2));
+
+const DEFAULT_FREQS_SETS = DEFAULT_FREQS_SETS_4FSK;
 
 const DEFAULT_ENERGY = {
   floor: 5e-7,
@@ -122,6 +126,22 @@ function buildPipelineThresholds(defs, scoreMinBank, scoreMin) {
   return thresholds;
 }
 
+function deriveBitsPerSymbol(freqSets, overrideBitsPerSymbol) {
+  if (Number.isFinite(overrideBitsPerSymbol) && overrideBitsPerSymbol > 0) {
+    return Math.floor(overrideBitsPerSymbol);
+  }
+  const firstSetLength = Array.isArray(freqSets?.[0]) ? freqSets[0].length : 0;
+  const log = Math.log2(Math.max(1, firstSetLength));
+  if (Number.isInteger(log) && log > 0) return log;
+  return 1;
+}
+
+function bitsForSymbolCount(count, fallbackBits = 1) {
+  const log = Math.log2(Math.max(1, count));
+  if (Number.isInteger(log) && log > 0) return log;
+  return fallbackBits;
+}
+
 function bitsToCodes(bits, length = bits.length) {
   const codes = [];
   for (let offset = 0; offset + CODE_BITS <= length; offset += CODE_BITS) {
@@ -221,7 +241,10 @@ function bitsToByte(bits) {
 }
 
 function resolveConfig(overrides = {}) {
-  const freqSets = overrides.freqSets ?? DEFAULT_FREQS_SETS;
+  const modulation = overrides.modulation === "bfsk" ? "bfsk" : "4fsk";
+  const freqSets =
+    overrides.freqSets ??
+    (modulation === "bfsk" ? DEFAULT_FREQS_SETS_BFSK : DEFAULT_FREQS_SETS_4FSK);
   const detectorConfig = overrides.detectorConfig ?? buildDetectorConfig(freqSets);
   const gainConfig = { ...DEFAULT_GAIN_CONFIG, ...(overrides.gainConfig || {}) };
   const pipelineDefs =
@@ -230,7 +253,9 @@ function resolveConfig(overrides = {}) {
   const scoreMinBank = overrides.scoreMinBank ?? DEFAULT_SCORE_MIN_BANK;
   const pipelineThresholds =
     overrides.pipelineThresholds ?? buildPipelineThresholds(pipelineDefs, scoreMinBank, scoreMin);
+  const bitsPerSymbol = deriveBitsPerSymbol(freqSets, overrides.bitsPerSymbol);
   return {
+    modulation,
     freqSets,
     detectorConfig,
     energy: { ...DEFAULT_ENERGY, ...(overrides.energy || {}) },
@@ -238,6 +263,7 @@ function resolveConfig(overrides = {}) {
     pipelineThresholds,
     scoreMin,
     scoreMinBank,
+    bitsPerSymbol,
     workletUrl: overrides.workletUrl ?? DEFAULT_WORKLET_URL,
   };
 }
@@ -538,15 +564,15 @@ export function createFeskDecoder(overrides = {}) {
     return null;
   }
 
-  function feedOne(dec, symIdx, score) {
-    // FESK4: symbol index 0-3 encodes 2 bits
-    if (symIdx < 0 || symIdx > 3) return null;
-    const bit0 = (symIdx >> 1) & 1;  // MSB
-    const bit1 = symIdx & 1;          // LSB
-    // Feed both bits in sequence
-    const result0 = feedBit(dec, bit0, score);
-    if (result0) return result0;
-    return feedBit(dec, bit1, score);
+  function feedOne(dec, symIdx, score, symbolCount) {
+    if (symIdx < 0 || symIdx >= symbolCount) return null;
+    const bitsPerSymbol = bitsForSymbolCount(symbolCount, config.bitsPerSymbol);
+    for (let shift = bitsPerSymbol - 1; shift >= 0; shift -= 1) {
+      const bit = (symIdx >> shift) & 1;
+      const result = feedBit(dec, bit, score);
+      if (result) return result;
+    }
+    return null;
   }
 
   function allPipelinesReady() {
@@ -637,7 +663,10 @@ export function createFeskDecoder(overrides = {}) {
       emitState({ kind: "freq", pipelineKey: def.key, freqHz: displayFreq });
 
       if ((r.score ?? 0) < threshold) continue;
-      const out = Number.isFinite(r.idx) ? feedOne(dec, r.idx, r.score) : null;
+      const symbolCount = Array.isArray(r.powers) ? r.powers.length : baseFreqs.length;
+      const out = Number.isFinite(r.idx)
+        ? feedOne(dec, r.idx, r.score, symbolCount || 1)
+        : null;
       if (!out) continue;
 
       events.emit("frame", {
@@ -956,6 +985,7 @@ export function createFeskDecoder(overrides = {}) {
 }
 
 export const DEFAULT_FESK_DECODER_CONFIG = resolveConfig();
+export { DEFAULT_FREQS_SETS_BFSK, DEFAULT_FREQS_SETS_4FSK };
 
 export const __testUtils = {
   bitsToCodes,

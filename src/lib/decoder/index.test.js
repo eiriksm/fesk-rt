@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_FESK_DECODER_CONFIG, __testUtils } from "./index.js";
+import {
+  DEFAULT_FESK_DECODER_CONFIG,
+  DEFAULT_FREQS_SETS_4FSK,
+  DEFAULT_FREQS_SETS_BFSK,
+  createFeskDecoder,
+  __testUtils,
+} from "./index.js";
 
 const {
   bitsToCodes,
@@ -23,10 +29,9 @@ describe("decoder internals", () => {
   it("preserves the historical default configuration constants", () => {
     const config = DEFAULT_FESK_DECODER_CONFIG;
 
-    expect(config.freqSets).toEqual([
-      [2349.32, 2637.02, 2959.96, 3322.44],
-      [2349.32, 2637.02, 2959.96, 3322.44],
-    ]);
+    expect(config.freqSets).toEqual(DEFAULT_FREQS_SETS_4FSK);
+    expect(config.bitsPerSymbol).toBe(2);
+    expect(config.modulation).toBe("4fsk");
 
     expect(config.detectorConfig).toHaveLength(2);
     expect(config.detectorConfig[0]).toMatchObject({
@@ -148,5 +153,13 @@ describe("decoder internals", () => {
     expect(thresholds.get("bank-0-gain0")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-0-gain1")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.25, 5);
+  });
+
+  it("supports selecting the BFSK modulation preset", () => {
+    const decoder = createFeskDecoder({ modulation: "bfsk" });
+
+    expect(decoder.config.modulation).toBe("bfsk");
+    expect(decoder.config.bitsPerSymbol).toBe(1);
+    expect(decoder.config.freqSets).toEqual(DEFAULT_FREQS_SETS_BFSK);
   });
 });
