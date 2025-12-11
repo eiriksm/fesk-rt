@@ -89,6 +89,13 @@ function buildDetectorConfig(freqSets) {
   });
 }
 
+function modulationFromFreqSet(freqSet = []) {
+  if (!Array.isArray(freqSet)) return "unknown";
+  if (freqSet.length === 2) return "bfsk";
+  if (freqSet.length === 4) return "4fsk";
+  return `${freqSet.length}-fsk`;
+}
+
 function buildPipelineDefs(freqSets, options = {}) {
   const {
     micBase = DEFAULT_GAIN_CONFIG.micBase,
@@ -97,8 +104,10 @@ function buildPipelineDefs(freqSets, options = {}) {
   } = options;
 
   const defs = [];
-  freqSets.forEach((_, idx) => {
+  freqSets.forEach((set, idx) => {
     const baseLabel = bankLabel(idx);
+    const modulation = modulationFromFreqSet(set);
+    const modulationLabel = modulation.toUpperCase();
     gainMultipliers.forEach((multiplier, gainIdx) => {
       const isBase = multiplier === 1;
       const gainLabel = isBase ? "" : ` ×${multiplier}`;
@@ -108,6 +117,8 @@ function buildPipelineDefs(freqSets, options = {}) {
         baseBankIndex: idx,
         label: `Bank ${baseLabel}${gainLabel}`,
         shortLabel: `${baseLabel}${shortGainLabel}`,
+        modulation,
+        modulationLabel,
         micGain: micBase * multiplier,
         sampleGain: sampleBase * multiplier,
       });

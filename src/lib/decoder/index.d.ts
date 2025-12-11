@@ -3,6 +3,8 @@ export interface PipelineDefinition {
   label: string;
   shortLabel?: string;
   baseBankIndex: number;
+  modulation: "bfsk" | "4fsk" | string;
+  modulationLabel: string;
   micGain: number;
   sampleGain: number;
 }

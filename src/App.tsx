@@ -380,6 +380,18 @@ export function App() {
     () => new Map(pipelineDefs.map((def) => [def.key, def] as const)),
     [pipelineDefs],
   );
+  const getPipelineDisplayLabel = useCallback(
+    (pipelineKey: string | null | undefined) => {
+      if (!pipelineKey) return "";
+      const def = pipelineByKey.get(pipelineKey);
+      if (!def) return "";
+      const modulation = def.modulationLabel || def.modulation?.toUpperCase?.();
+      if (modulation && def.shortLabel) return `${modulation} • ${def.shortLabel}`;
+      if (modulation && def.label) return `${modulation} • ${def.label}`;
+      return def.label ?? "";
+    },
+    [pipelineByKey],
+  );
   const metricDefinitions = useMemo(
     () => pipelineDefs.map((def) => ({ key: def.key, label: def.label })),
     [pipelineDefs],
@@ -444,20 +456,12 @@ export function App() {
     candidateState.candidates.get(candidateState.displayedKey || "");
   const previewFallback = status || "Listening…";
   const previewText = previewCandidate?.text ?? previewFallback;
-  const previewLabel =
-    debugMode && previewCandidate
-      ? pipelineByKey.get(previewCandidate.pipelineKey)?.label ||
-        previewCandidate.pipelineKey
-      : "";
+  const previewLabel = getPipelineDisplayLabel(previewCandidate?.pipelineKey);
   const previewIsProvisional = previewCandidate
     ? previewCandidate.provisional || !previewCandidate.crcOk
     : false;
 
-  const finalLabel =
-    debugMode && finalResult.pipelineKey
-      ? pipelineByKey.get(finalResult.pipelineKey)?.label ||
-        finalResult.pipelineKey
-      : "";
+  const finalLabel = getPipelineDisplayLabel(finalResult.pipelineKey);
 
   const clearRecording = useCallback(() => {
     setRecordedWavBlob(null);
@@ -1147,8 +1151,8 @@ export function App() {
     previewClassNames.push(previewIsProvisional ? "provisional" : "decoded-ok");
   }
 
-  const previewLabelHidden = !debugMode || !previewLabel;
-  const finalLabelHidden = !debugMode || !finalLabel;
+  const previewLabelHidden = !previewLabel;
+  const finalLabelHidden = !finalLabel;
 
   const downloadTitle = mediaRecorderSupported
     ? undefined

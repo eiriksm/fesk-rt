@@ -124,7 +124,7 @@ describe("decoder internals", () => {
   it("builds pipeline thresholds with per-bank overrides", () => {
     const freqSets = [
       [100, 200],
-      [300, 400],
+      [300, 400, 500, 600],
     ];
     const defs = buildPipelineDefs(freqSets, {
       micBase: 2,
@@ -137,6 +137,8 @@ describe("decoder internals", () => {
       key: "bank-0-gain0",
       micGain: 2,
       sampleGain: 3,
+      modulation: "bfsk",
+      modulationLabel: "BFSK",
     });
     expect(defs[1]).toMatchObject({
       key: "bank-0-gain1",
@@ -153,6 +155,12 @@ describe("decoder internals", () => {
     expect(thresholds.get("bank-0-gain0")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-0-gain1")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.25, 5);
+
+    expect(defs[3]).toMatchObject({
+      key: "bank-1-gain0",
+      modulation: "4fsk",
+      modulationLabel: "4FSK",
+    });
   });
 
   it("supports selecting the BFSK modulation preset", () => {
