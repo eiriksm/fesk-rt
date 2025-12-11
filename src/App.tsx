@@ -389,6 +389,8 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 }
 
 export function App() {
+  const IDLE_STATUS = "Click Start to listen…";
+
   const [modulation, setModulation] = useState<ModulationMode>("bfsk");
   const [decoder, setDecoder] = useState<FeskDecoder>(() =>
     createDecoderForMode("bfsk"),
@@ -414,7 +416,7 @@ export function App() {
     return params.get("debug") === "1";
   }, []);
 
-  const [status, setStatus] = useState<string>("idle");
+  const [status, setStatus] = useState<string>(IDLE_STATUS);
   const [sampleRateText, setSampleRateText] = useState<string>("—");
   const [frequencies, setFrequencies] = useState<Record<string, string>>(() =>
     createInitialDisplayMap(pipelineDefs),
@@ -467,9 +469,7 @@ export function App() {
   const previewCandidate =
     candidateState.displayedKey &&
     candidateState.candidates.get(candidateState.displayedKey || "");
-  const previewFallback = status === "idle"
-    ? "Waiting for live audio…"
-    : status || "Listening…";
+  const previewFallback = status || "Listening…";
   const previewText = previewCandidate?.text ?? previewFallback;
   const previewLabel =
     debugMode && previewCandidate
@@ -660,9 +660,16 @@ export function App() {
       }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
-      setStatus(nextStatus ?? "idle");
+      setStatus(nextStatus ?? IDLE_STATUS);
     },
-    [decoder, dispatchCandidates, resetDisplays, setFinalResult, stopRecording],
+    [
+      IDLE_STATUS,
+      decoder,
+      dispatchCandidates,
+      resetDisplays,
+      setFinalResult,
+      stopRecording,
+    ],
   );
 
   const handleModulationChange = useCallback(
@@ -1043,15 +1050,6 @@ export function App() {
     runMode,
     setupRecorder,
   ]);
-
-  useEffect(() => {
-    if (isBusy || runMode !== "idle") return;
-    handleStart().catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error("Auto-start failed", err);
-      setStatus(`auto-start failed: ${message}`);
-    });
-  }, [handleStart, isBusy, runMode]);
 
   const handlePlaySample = useCallback(
     async (entry: (typeof SAMPLE_WAV_CONFIG)[number], delta: number) => {
