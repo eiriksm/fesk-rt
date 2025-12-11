@@ -33,36 +33,10 @@ const CANDIDATE_INACTIVITY_MS = 2200;
 const CRC_LEADER_HOLD_MS = 4500;
 const CURRENT_LEADER_STICKINESS = 0.0025;
 
-type ModulationMode = "bfsk" | "4fsk";
-
-const MODULATION_OPTIONS: Record<ModulationMode, {
-  label: string;
-  freqSets: number[][];
-  bitsPerSymbol: number;
-  modulation: ModulationMode;
-}> = {
-  bfsk: {
-    label: "BFSK (2-tone)",
-    freqSets: DEFAULT_FREQS_SETS_BFSK,
-    bitsPerSymbol: 1,
-    modulation: "bfsk",
-  },
-  "4fsk": {
-    label: "4FSK (2 bits per tone)",
-    freqSets: DEFAULT_FREQS_SETS_4FSK,
-    bitsPerSymbol: 2,
-    modulation: "4fsk",
-  },
-};
-
-function createDecoderForMode(mode: ModulationMode): FeskDecoder {
-  const option = MODULATION_OPTIONS[mode];
-  return createFeskDecoder({
-    modulation: option.modulation,
-    freqSets: option.freqSets,
-    bitsPerSymbol: option.bitsPerSymbol,
-  });
-}
+const HYBRID_FREQ_SETS = [
+  ...DEFAULT_FREQS_SETS_BFSK,
+  ...DEFAULT_FREQS_SETS_4FSK,
+];
 
 interface Candidate {
   pipelineKey: string;
@@ -391,9 +365,8 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 export function App() {
   const IDLE_STATUS = "Click Start to listen…";
 
-  const [modulation, setModulation] = useState<ModulationMode>("bfsk");
-  const [decoder, setDecoder] = useState<FeskDecoder>(() =>
-    createDecoderForMode("bfsk"),
+  const [decoder] = useState<FeskDecoder>(() =>
+    createFeskDecoder({ freqSets: HYBRID_FREQ_SETS }),
   );
   const decoderRef = useRef<FeskDecoder>(decoder);
   useEffect(() => {
@@ -670,21 +643,6 @@ export function App() {
       setFinalResult,
       stopRecording,
     ],
-  );
-
-  const handleModulationChange = useCallback(
-    async (nextMode: ModulationMode) => {
-      if (nextMode === modulation) return;
-      setIsBusy(true);
-      try {
-        await cleanup("mode changed", { resetFinalResult: true });
-        setDecoder(createDecoderForMode(nextMode));
-        setModulation(nextMode);
-      } finally {
-        setIsBusy(false);
-      }
-    },
-    [cleanup, modulation, setDecoder],
   );
 
   const logTones = useCallback(() => {
@@ -1200,23 +1158,6 @@ export function App() {
     <div className="app">
       <h1>FESK Real-Time Decoder</h1>
       <div className="row controls">
-        <label className="modulation-control" htmlFor="modulationSelect">
-          <span>Modulation:</span>
-          <select
-            id="modulationSelect"
-            value={modulation}
-            onChange={(event) =>
-              handleModulationChange(event.target.value as ModulationMode)
-            }
-            disabled={isBusy || runMode !== "idle"}
-          >
-            {Object.entries(MODULATION_OPTIONS).map(([mode, option]) => (
-              <option key={mode} value={mode}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
         <button id="startBtn" onClick={handleStart} disabled={startDisabled}>
           Start 🎙️
         </button>
