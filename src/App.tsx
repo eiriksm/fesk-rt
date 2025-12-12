@@ -386,7 +386,8 @@ export function App() {
       const def = pipelineByKey.get(pipelineKey);
       if (!def) return "";
       const modulation = def.modulationLabel || def.modulation?.toUpperCase?.();
-      if (modulation && def.shortLabel) return `${modulation} • ${def.shortLabel}`;
+      if (modulation && def.shortLabel)
+        return `${modulation} • ${def.shortLabel}`;
       if (modulation && def.label) return `${modulation} • ${def.label}`;
       return def.label ?? "";
     },

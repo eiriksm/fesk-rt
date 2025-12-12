@@ -55,7 +55,9 @@ describe("decoder internals", () => {
     });
 
     expect(config.scoreMin).toBeCloseTo(0.2, 5);
-    expect(config.scoreMinBank).toEqual([0.28, 0.18]);
+    // DEFAULT_SCORE_MIN_BANK now supports 4 banks for hybrid BFSK+4FSK configuration
+    // The default 2-bank 4FSK config only uses the first 2 elements
+    expect(config.scoreMinBank).toEqual([0.28, 0.18, 0.28, 0.18]);
 
     const gain0 = config.pipelineDefs.find((def) => def.key === "bank-0-gain0");
     const gain1 = config.pipelineDefs.find((def) => def.key === "bank-0-gain1");

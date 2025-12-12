@@ -15,8 +15,6 @@ const DEFAULT_FREQS_SETS_4FSK = [
 
 const DEFAULT_FREQS_SETS_BFSK = DEFAULT_FREQS_SETS_4FSK.map((set) => set.slice(0, 2));
 
-const DEFAULT_FREQS_SETS = DEFAULT_FREQS_SETS_4FSK;
-
 const DEFAULT_ENERGY = {
   floor: 5e-7,
   on: 6e-4,
@@ -35,9 +33,10 @@ const DEFAULT_GAIN_CONFIG = {
 };
 
 const DEFAULT_SCORE_MIN = 0.2;
-const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((_, idx) =>
-  idx === 0 ? 0.28 : 0.18,
-);
+// Per-bank thresholds for hybrid BFSK+4FSK configuration (4 banks total)
+// Banks 0-1: BFSK, Banks 2-3: 4FSK
+// Maintains historical 4FSK thresholds (0.28/0.18) for backward compatibility
+const DEFAULT_SCORE_MIN_BANK = [0.28, 0.18, 0.28, 0.18];
 
 const DEFAULT_WORKLET_URL = "/mb-fesk-worklet.js";
 
