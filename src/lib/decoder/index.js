@@ -15,8 +15,6 @@ const DEFAULT_FREQS_SETS_4FSK = [
 
 const DEFAULT_FREQS_SETS_BFSK = DEFAULT_FREQS_SETS_4FSK.map((set) => set.slice(0, 2));
 
-const DEFAULT_FREQS_SETS = DEFAULT_FREQS_SETS_4FSK;
-
 const DEFAULT_ENERGY = {
   floor: 5e-7,
   on: 6e-4,
