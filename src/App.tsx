@@ -9,6 +9,8 @@ import {
 
 import { DebugMetrics } from "./components/DebugMetrics";
 import {
+  DEFAULT_FREQS_SETS_4FSK,
+  DEFAULT_FREQS_SETS_BFSK,
   createFeskDecoder,
   type DecoderFrameEvent,
   type DecoderPreviewEvent,
@@ -20,34 +22,21 @@ import {
 import "./App.css";
 
 const SAMPLE_WAV_CONFIG = [
-  { id: "sample1Btn", url: "sample.wav", label: "1" },
-  { id: "sample2Btn", url: "sample2.wav", label: "2" },
-  { id: "sample3Btn", url: "sample32.wav", label: "3" },
-  { id: "sample4Btn", url: "sample4.wav", label: "4" },
-  { id: "sample5Btn", url: "sample-clock-on-laptop.wav", label: "5" },
-  {
-    id: "sample6Btn",
-    url: "sample-clock-recorder-on-phone.wav",
-    label: "6",
-  },
-  { id: "sample7Btn", url: "sample-fast.wav", label: "7" },
-  {
-    id: "sample8Btn",
-    url: "sample-phone-recording-fast.wav",
-    label: "8",
-  },
-  { id: "sample9Btn", url: "sample-uptime-sim.wav", label: "9" },
-  { id: "sample10Btn", url: "sample-from-pr.wav", label: "10" },
-  { id: "sample11Btn", url: "sample-with-newline.wav", label: "11" },
-  { id: "sample12Btn", url: "sample-with-c32.wav", label: "12" },
-  { id: "sample13Btn", url: "sample-with-c32-long.wav", label: "13" },
-  { id: "sample14Btn", url: "sample-uptime-from-c32.wav", label: "14" },
+  { url: "sample1.wav" },
+  { url: "sample2.wav" },
+  { url: "sample3.wav" },
+  { url: "sample4.wav" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
 const CANDIDATE_INACTIVITY_MS = 2200;
 const CRC_LEADER_HOLD_MS = 4500;
 const CURRENT_LEADER_STICKINESS = 0.0025;
+
+const HYBRID_FREQ_SETS = [
+  ...DEFAULT_FREQS_SETS_BFSK,
+  ...DEFAULT_FREQS_SETS_4FSK,
+];
 
 interface Candidate {
   pipelineKey: string;
@@ -374,8 +363,15 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 }
 
 export function App() {
-  const decoderRef = useRef<FeskDecoder>(createFeskDecoder());
-  const decoder = decoderRef.current;
+  const IDLE_STATUS = "Click Start to listen…";
+
+  const [decoder] = useState<FeskDecoder>(() =>
+    createFeskDecoder({ freqSets: HYBRID_FREQ_SETS }),
+  );
+  const decoderRef = useRef<FeskDecoder>(decoder);
+  useEffect(() => {
+    decoderRef.current = decoder;
+  }, [decoder]);
   const pipelineDefs = useMemo<PipelineDefinition[]>(
     () => decoder.config.pipelineDefs,
     [decoder],
@@ -383,6 +379,19 @@ export function App() {
   const pipelineByKey = useMemo(
     () => new Map(pipelineDefs.map((def) => [def.key, def] as const)),
     [pipelineDefs],
+  );
+  const getPipelineDisplayLabel = useCallback(
+    (pipelineKey: string | null | undefined) => {
+      if (!pipelineKey) return "";
+      const def = pipelineByKey.get(pipelineKey);
+      if (!def) return "";
+      const modulation = def.modulationLabel || def.modulation?.toUpperCase?.();
+      if (modulation && def.shortLabel)
+        return `${modulation} • ${def.shortLabel}`;
+      if (modulation && def.label) return `${modulation} • ${def.label}`;
+      return def.label ?? "";
+    },
+    [pipelineByKey],
   );
   const metricDefinitions = useMemo(
     () => pipelineDefs.map((def) => ({ key: def.key, label: def.label })),
@@ -393,7 +402,7 @@ export function App() {
     return params.get("debug") === "1";
   }, []);
 
-  const [status, setStatus] = useState<string>("idle");
+  const [status, setStatus] = useState<string>(IDLE_STATUS);
   const [sampleRateText, setSampleRateText] = useState<string>("—");
   const [frequencies, setFrequencies] = useState<Record<string, string>>(() =>
     createInitialDisplayMap(pipelineDefs),
@@ -446,21 +455,14 @@ export function App() {
   const previewCandidate =
     candidateState.displayedKey &&
     candidateState.candidates.get(candidateState.displayedKey || "");
-  const previewText = previewCandidate?.text ?? "";
-  const previewLabel =
-    debugMode && previewCandidate
-      ? pipelineByKey.get(previewCandidate.pipelineKey)?.label ||
-        previewCandidate.pipelineKey
-      : "";
+  const previewFallback = status || "Listening…";
+  const previewText = previewCandidate?.text ?? previewFallback;
+  const previewLabel = getPipelineDisplayLabel(previewCandidate?.pipelineKey);
   const previewIsProvisional = previewCandidate
     ? previewCandidate.provisional || !previewCandidate.crcOk
     : false;
 
-  const finalLabel =
-    debugMode && finalResult.pipelineKey
-      ? pipelineByKey.get(finalResult.pipelineKey)?.label ||
-        finalResult.pipelineKey
-      : "";
+  const finalLabel = getPipelineDisplayLabel(finalResult.pipelineKey);
 
   const clearRecording = useCallback(() => {
     setRecordedWavBlob(null);
@@ -636,9 +638,16 @@ export function App() {
       }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
-      setStatus(nextStatus ?? "idle");
+      setStatus(nextStatus ?? IDLE_STATUS);
     },
-    [decoder, dispatchCandidates, resetDisplays, setFinalResult, stopRecording],
+    [
+      IDLE_STATUS,
+      decoder,
+      dispatchCandidates,
+      resetDisplays,
+      setFinalResult,
+      stopRecording,
+    ],
   );
 
   const logTones = useCallback(() => {
@@ -1006,14 +1015,14 @@ export function App() {
   ]);
 
   const handlePlaySample = useCallback(
-    async (entry: (typeof SAMPLE_WAV_CONFIG)[number]) => {
+    async (entry: (typeof SAMPLE_WAV_CONFIG)[number], delta: number) => {
       if (isBusy || runMode !== "idle") return;
       setIsBusy(true);
       try {
         await cleanup(null, { resetFinalResult: true });
-        const labelSuffix = entry.label ? ` ${entry.label}` : "";
+        const labelSuffix = delta + 1;
         setStatus(`loading sample${labelSuffix}…`);
-        const response = await fetch(entry.url);
+        const response = await fetch(`samples/${entry.url}`);
         if (!response.ok) {
           throw new Error(`fetch failed (${response.status})`);
         }
@@ -1064,7 +1073,8 @@ export function App() {
           throw new Error("empty or unsupported WAV payload");
         }
         const playbackBuffer = toMonoBuffer(audioCtxInstance, audioBuffer);
-        await decoder.attachBuffer(playbackBuffer, { label: entry.label });
+        const label = `${labelSuffix}`;
+        await decoder.attachBuffer(playbackBuffer, { label });
         pipelineDefs.forEach((def) => {
           console.info(`[${def.label}] sample input connected`);
         });
@@ -1122,7 +1132,6 @@ export function App() {
   }, [decoder, handleFrameEvent, handlePreviewEvent, handleStateEvent]);
 
   useEffect(() => {
-    const decoderInstance = decoderRef.current;
     return () => {
       const recorder = recorderRef.current;
       try {
@@ -1134,7 +1143,7 @@ export function App() {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
-      decoderInstance?.stop().catch(() => undefined);
+      decoderRef.current?.stop().catch(() => undefined);
     };
   }, []);
 
@@ -1143,8 +1152,8 @@ export function App() {
     previewClassNames.push(previewIsProvisional ? "provisional" : "decoded-ok");
   }
 
-  const previewLabelHidden = !debugMode || !previewLabel;
-  const finalLabelHidden = !debugMode || !finalLabel;
+  const previewLabelHidden = !previewLabel;
+  const finalLabelHidden = !finalLabel;
 
   const downloadTitle = mediaRecorderSupported
     ? undefined
@@ -1173,16 +1182,19 @@ export function App() {
         <summary>Debug</summary>
         <div className="debug-panel-content">
           <div className="debug-controls">
-            {SAMPLE_WAV_CONFIG.map((entry) => (
-              <button
-                id={entry.id}
-                key={entry.url}
-                onClick={() => handlePlaySample(entry)}
-                disabled={sampleButtonsDisabled}
-              >
-                Play Sample {entry.label} 🔊
-              </button>
-            ))}
+            {SAMPLE_WAV_CONFIG.map((entry, delta: number) => {
+              const id = delta + 1;
+              return (
+                <button
+                  id={`sample${id}Btn`}
+                  key={entry.url}
+                  onClick={() => handlePlaySample(entry, delta)}
+                  disabled={sampleButtonsDisabled}
+                >
+                  Play Sample {id} 🔊
+                </button>
+              );
+            })}
           </div>
           <div className="debug-metrics">
             <div className="debug-metric">

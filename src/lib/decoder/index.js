@@ -8,12 +8,12 @@ const END_MARK_BITS = Array.from(
   (_, i) => (END_CODE >> (CODE_BITS - 1 - i)) & 1,
 );
 
-const DEFAULT_FREQS_SETS = [
-  [2490.2, 3134.8],
-  [7394.0, 9313.0],
+const DEFAULT_FREQS_SETS_4FSK = [
+  [2349.32, 2637.02, 2959.96, 3322.44],
+  [2349.32, 2637.02, 2959.96, 3322.44],
 ];
 
-const DEFAULT_BANK_LABEL_OVERRIDES = new Map([[3, "HW"]]);
+const DEFAULT_FREQS_SETS_BFSK = DEFAULT_FREQS_SETS_4FSK.map((set) => set.slice(0, 2));
 
 const DEFAULT_ENERGY = {
   floor: 5e-7,
@@ -33,9 +33,10 @@ const DEFAULT_GAIN_CONFIG = {
 };
 
 const DEFAULT_SCORE_MIN = 0.2;
-const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((_, idx) =>
-  idx === 0 ? 0.28 : 0.18,
-);
+// Per-bank thresholds for hybrid BFSK+4FSK configuration (4 banks total)
+// Banks 0-1: BFSK, Banks 2-3: 4FSK
+// Maintains historical 4FSK thresholds (0.28/0.18) for backward compatibility
+const DEFAULT_SCORE_MIN_BANK = [0.28, 0.18, 0.28, 0.18];
 
 const DEFAULT_WORKLET_URL = "/mb-fesk-worklet.js";
 
@@ -68,8 +69,7 @@ function createEmitter() {
   };
 }
 
-function bankLabel(idx, overrides = DEFAULT_BANK_LABEL_OVERRIDES) {
-  if (overrides.has(idx)) return overrides.get(idx);
+function bankLabel(idx) {
   if (idx >= 0 && idx < 26) return String.fromCharCode(65 + idx);
   return String(idx + 1);
 }
@@ -88,17 +88,25 @@ function buildDetectorConfig(freqSets) {
   });
 }
 
+function modulationFromFreqSet(freqSet = []) {
+  if (!Array.isArray(freqSet)) return "unknown";
+  if (freqSet.length === 2) return "bfsk";
+  if (freqSet.length === 4) return "4fsk";
+  return `${freqSet.length}-fsk`;
+}
+
 function buildPipelineDefs(freqSets, options = {}) {
   const {
-    bankLabelOverrides = DEFAULT_BANK_LABEL_OVERRIDES,
     micBase = DEFAULT_GAIN_CONFIG.micBase,
     sampleBase = DEFAULT_GAIN_CONFIG.sampleBase,
     gainMultipliers = DEFAULT_GAIN_CONFIG.gainMultipliers,
   } = options;
 
   const defs = [];
-  freqSets.forEach((_, idx) => {
-    const baseLabel = bankLabel(idx, bankLabelOverrides);
+  freqSets.forEach((set, idx) => {
+    const baseLabel = bankLabel(idx);
+    const modulation = modulationFromFreqSet(set);
+    const modulationLabel = modulation.toUpperCase();
     gainMultipliers.forEach((multiplier, gainIdx) => {
       const isBase = multiplier === 1;
       const gainLabel = isBase ? "" : ` ×${multiplier}`;
@@ -108,6 +116,8 @@ function buildPipelineDefs(freqSets, options = {}) {
         baseBankIndex: idx,
         label: `Bank ${baseLabel}${gainLabel}`,
         shortLabel: `${baseLabel}${shortGainLabel}`,
+        modulation,
+        modulationLabel,
         micGain: micBase * multiplier,
         sampleGain: sampleBase * multiplier,
       });
@@ -124,6 +134,22 @@ function buildPipelineThresholds(defs, scoreMinBank, scoreMin) {
     thresholds.set(def.key, Number.isFinite(value) ? value : scoreMin);
   });
   return thresholds;
+}
+
+function deriveBitsPerSymbol(freqSets, overrideBitsPerSymbol) {
+  if (Number.isFinite(overrideBitsPerSymbol) && overrideBitsPerSymbol > 0) {
+    return Math.floor(overrideBitsPerSymbol);
+  }
+  const firstSetLength = Array.isArray(freqSets?.[0]) ? freqSets[0].length : 0;
+  const log = Math.log2(Math.max(1, firstSetLength));
+  if (Number.isInteger(log) && log > 0) return log;
+  return 1;
+}
+
+function bitsForSymbolCount(count, fallbackBits = 1) {
+  const log = Math.log2(Math.max(1, count));
+  if (Number.isInteger(log) && log > 0) return log;
+  return fallbackBits;
 }
 
 function bitsToCodes(bits, length = bits.length) {
@@ -225,7 +251,10 @@ function bitsToByte(bits) {
 }
 
 function resolveConfig(overrides = {}) {
-  const freqSets = overrides.freqSets ?? DEFAULT_FREQS_SETS;
+  const modulation = overrides.modulation === "bfsk" ? "bfsk" : "4fsk";
+  const freqSets =
+    overrides.freqSets ??
+    (modulation === "bfsk" ? DEFAULT_FREQS_SETS_BFSK : DEFAULT_FREQS_SETS_4FSK);
   const detectorConfig = overrides.detectorConfig ?? buildDetectorConfig(freqSets);
   const gainConfig = { ...DEFAULT_GAIN_CONFIG, ...(overrides.gainConfig || {}) };
   const pipelineDefs =
@@ -234,7 +263,9 @@ function resolveConfig(overrides = {}) {
   const scoreMinBank = overrides.scoreMinBank ?? DEFAULT_SCORE_MIN_BANK;
   const pipelineThresholds =
     overrides.pipelineThresholds ?? buildPipelineThresholds(pipelineDefs, scoreMinBank, scoreMin);
+  const bitsPerSymbol = deriveBitsPerSymbol(freqSets, overrides.bitsPerSymbol);
   return {
+    modulation,
     freqSets,
     detectorConfig,
     energy: { ...DEFAULT_ENERGY, ...(overrides.energy || {}) },
@@ -242,6 +273,7 @@ function resolveConfig(overrides = {}) {
     pipelineThresholds,
     scoreMin,
     scoreMinBank,
+    bitsPerSymbol,
     workletUrl: overrides.workletUrl ?? DEFAULT_WORKLET_URL,
   };
 }
@@ -464,10 +496,8 @@ export function createFeskDecoder(overrides = {}) {
     return result;
   }
 
-  function feedOne(dec, symIdx, score) {
+  function feedBit(dec, bit, score) {
     const s = score ?? 0;
-    if (symIdx !== 0 && symIdx !== 1) return null;
-    const bit = symIdx & 1;
 
     if (dec.state === "hunt") {
       dec.recentBits = ((dec.recentBits << 1) | bit) & START_END_MASK;
@@ -540,6 +570,17 @@ export function createFeskDecoder(overrides = {}) {
     if (!dec.markerBits.length && !flushedAny) {
       const candidate = updatePreview(dec);
       if (candidate) publishPreviewCandidate(dec, candidate);
+    }
+    return null;
+  }
+
+  function feedOne(dec, symIdx, score, symbolCount) {
+    if (symIdx < 0 || symIdx >= symbolCount) return null;
+    const bitsPerSymbol = bitsForSymbolCount(symbolCount, config.bitsPerSymbol);
+    for (let shift = bitsPerSymbol - 1; shift >= 0; shift -= 1) {
+      const bit = (symIdx >> shift) & 1;
+      const result = feedBit(dec, bit, score);
+      if (result) return result;
     }
     return null;
   }
@@ -632,7 +673,10 @@ export function createFeskDecoder(overrides = {}) {
       emitState({ kind: "freq", pipelineKey: def.key, freqHz: displayFreq });
 
       if ((r.score ?? 0) < threshold) continue;
-      const out = Number.isFinite(r.idx) ? feedOne(dec, r.idx, r.score) : null;
+      const symbolCount = Array.isArray(r.powers) ? r.powers.length : baseFreqs.length;
+      const out = Number.isFinite(r.idx)
+        ? feedOne(dec, r.idx, r.score, symbolCount || 1)
+        : null;
       if (!out) continue;
 
       events.emit("frame", {
@@ -951,6 +995,7 @@ export function createFeskDecoder(overrides = {}) {
 }
 
 export const DEFAULT_FESK_DECODER_CONFIG = resolveConfig();
+export { DEFAULT_FREQS_SETS_BFSK, DEFAULT_FREQS_SETS_4FSK };
 
 export const __testUtils = {
   bitsToCodes,
