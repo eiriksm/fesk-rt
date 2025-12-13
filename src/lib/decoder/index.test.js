@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_FESK_DECODER_CONFIG, __testUtils } from "./index.js";
+import {
+  DEFAULT_FESK_DECODER_CONFIG,
+  DEFAULT_FREQS_SETS_4FSK,
+  DEFAULT_FREQS_SETS_BFSK,
+  createFeskDecoder,
+  __testUtils,
+} from "./index.js";
 
 const {
   bitsToCodes,
@@ -23,10 +29,9 @@ describe("decoder internals", () => {
   it("preserves the historical default configuration constants", () => {
     const config = DEFAULT_FESK_DECODER_CONFIG;
 
-    expect(config.freqSets).toEqual([
-      [2349.32, 2637.02, 2959.96, 3322.44],
-      [2349.32, 2637.02, 2959.96, 3322.44],
-    ]);
+    expect(config.freqSets).toEqual(DEFAULT_FREQS_SETS_4FSK);
+    expect(config.bitsPerSymbol).toBe(2);
+    expect(config.modulation).toBe("4fsk");
 
     expect(config.detectorConfig).toHaveLength(2);
     expect(config.detectorConfig[0]).toMatchObject({
@@ -50,7 +55,9 @@ describe("decoder internals", () => {
     });
 
     expect(config.scoreMin).toBeCloseTo(0.2, 5);
-    expect(config.scoreMinBank).toEqual([0.28, 0.18]);
+    // DEFAULT_SCORE_MIN_BANK now supports 4 banks for hybrid BFSK+4FSK configuration
+    // The default 2-bank 4FSK config only uses the first 2 elements
+    expect(config.scoreMinBank).toEqual([0.28, 0.18, 0.28, 0.18]);
 
     const gain0 = config.pipelineDefs.find((def) => def.key === "bank-0-gain0");
     const gain1 = config.pipelineDefs.find((def) => def.key === "bank-0-gain1");
@@ -119,7 +126,7 @@ describe("decoder internals", () => {
   it("builds pipeline thresholds with per-bank overrides", () => {
     const freqSets = [
       [100, 200],
-      [300, 400],
+      [300, 400, 500, 600],
     ];
     const defs = buildPipelineDefs(freqSets, {
       micBase: 2,
@@ -132,6 +139,8 @@ describe("decoder internals", () => {
       key: "bank-0-gain0",
       micGain: 2,
       sampleGain: 3,
+      modulation: "bfsk",
+      modulationLabel: "BFSK",
     });
     expect(defs[1]).toMatchObject({
       key: "bank-0-gain1",
@@ -148,5 +157,19 @@ describe("decoder internals", () => {
     expect(thresholds.get("bank-0-gain0")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-0-gain1")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.25, 5);
+
+    expect(defs[3]).toMatchObject({
+      key: "bank-1-gain0",
+      modulation: "4fsk",
+      modulationLabel: "4FSK",
+    });
+  });
+
+  it("supports selecting the BFSK modulation preset", () => {
+    const decoder = createFeskDecoder({ modulation: "bfsk" });
+
+    expect(decoder.config.modulation).toBe("bfsk");
+    expect(decoder.config.bitsPerSymbol).toBe(1);
+    expect(decoder.config.freqSets).toEqual(DEFAULT_FREQS_SETS_BFSK);
   });
 });

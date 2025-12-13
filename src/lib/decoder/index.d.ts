@@ -3,6 +3,8 @@ export interface PipelineDefinition {
   label: string;
   shortLabel?: string;
   baseBankIndex: number;
+  modulation: "bfsk" | "4fsk" | string;
+  modulationLabel: string;
   micGain: number;
   sampleGain: number;
 }
@@ -84,6 +86,8 @@ export interface FeskDecoderConfig {
   pipelineThresholds: Map<string, number>;
   detectorConfig: unknown;
   freqSets: number[][];
+  bitsPerSymbol: number;
+  modulation: "bfsk" | "4fsk";
   energy: {
     floor: number;
     on: number;
@@ -117,6 +121,21 @@ export interface FeskDecoder {
   getAudioContext(): AudioContext | null;
 }
 
-export declare function createFeskDecoder(overrides?: unknown): FeskDecoder;
+export declare function createFeskDecoder(overrides?: {
+  modulation?: "bfsk" | "4fsk";
+  freqSets?: number[][];
+  detectorConfig?: unknown;
+  gainConfig?: unknown;
+  pipelineDefs?: PipelineDefinition[];
+  pipelineOptions?: unknown;
+  scoreMin?: number;
+  scoreMinBank?: number[];
+  pipelineThresholds?: Map<string, number>;
+  bitsPerSymbol?: number;
+  energy?: unknown;
+  workletUrl?: string | URL | (() => URL);
+}): FeskDecoder;
 
 export declare const DEFAULT_FESK_DECODER_CONFIG: FeskDecoderConfig;
+export declare const DEFAULT_FREQS_SETS_BFSK: number[][];
+export declare const DEFAULT_FREQS_SETS_4FSK: number[][];
