@@ -9,8 +9,6 @@ import {
 
 import { DebugMetrics } from "./components/DebugMetrics";
 import {
-  DEFAULT_FREQS_SETS_4FSK,
-  DEFAULT_FREQS_SETS_BFSK,
   createFeskDecoder,
   type DecoderFrameEvent,
   type DecoderPreviewEvent,
@@ -32,11 +30,6 @@ const DOWNLOAD_LABEL = "Download WAV ⬇️";
 const CANDIDATE_INACTIVITY_MS = 2200;
 const CRC_LEADER_HOLD_MS = 4500;
 const CURRENT_LEADER_STICKINESS = 0.0025;
-
-const HYBRID_FREQ_SETS = [
-  ...DEFAULT_FREQS_SETS_BFSK,
-  ...DEFAULT_FREQS_SETS_4FSK,
-];
 
 interface Candidate {
   pipelineKey: string;
@@ -363,15 +356,8 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 }
 
 export function App() {
-  const IDLE_STATUS = "Click Start to listen…";
-
-  const [decoder] = useState<FeskDecoder>(() =>
-    createFeskDecoder({ freqSets: HYBRID_FREQ_SETS }),
-  );
-  const decoderRef = useRef<FeskDecoder>(decoder);
-  useEffect(() => {
-    decoderRef.current = decoder;
-  }, [decoder]);
+  const decoderRef = useRef<FeskDecoder>(createFeskDecoder());
+  const decoder = decoderRef.current;
   const pipelineDefs = useMemo<PipelineDefinition[]>(
     () => decoder.config.pipelineDefs,
     [decoder],
@@ -379,19 +365,6 @@ export function App() {
   const pipelineByKey = useMemo(
     () => new Map(pipelineDefs.map((def) => [def.key, def] as const)),
     [pipelineDefs],
-  );
-  const getPipelineDisplayLabel = useCallback(
-    (pipelineKey: string | null | undefined) => {
-      if (!pipelineKey) return "";
-      const def = pipelineByKey.get(pipelineKey);
-      if (!def) return "";
-      const modulation = def.modulationLabel || def.modulation?.toUpperCase?.();
-      if (modulation && def.shortLabel)
-        return `${modulation} • ${def.shortLabel}`;
-      if (modulation && def.label) return `${modulation} • ${def.label}`;
-      return def.label ?? "";
-    },
-    [pipelineByKey],
   );
   const metricDefinitions = useMemo(
     () => pipelineDefs.map((def) => ({ key: def.key, label: def.label })),
@@ -402,7 +375,7 @@ export function App() {
     return params.get("debug") === "1";
   }, []);
 
-  const [status, setStatus] = useState<string>(IDLE_STATUS);
+  const [status, setStatus] = useState<string>("idle");
   const [sampleRateText, setSampleRateText] = useState<string>("—");
   const [frequencies, setFrequencies] = useState<Record<string, string>>(() =>
     createInitialDisplayMap(pipelineDefs),
@@ -455,14 +428,21 @@ export function App() {
   const previewCandidate =
     candidateState.displayedKey &&
     candidateState.candidates.get(candidateState.displayedKey || "");
-  const previewFallback = status || "Listening…";
-  const previewText = previewCandidate?.text ?? previewFallback;
-  const previewLabel = getPipelineDisplayLabel(previewCandidate?.pipelineKey);
+  const previewText = previewCandidate?.text ?? "";
+  const previewLabel =
+    debugMode && previewCandidate
+      ? pipelineByKey.get(previewCandidate.pipelineKey)?.label ||
+        previewCandidate.pipelineKey
+      : "";
   const previewIsProvisional = previewCandidate
     ? previewCandidate.provisional || !previewCandidate.crcOk
     : false;
 
-  const finalLabel = getPipelineDisplayLabel(finalResult.pipelineKey);
+  const finalLabel =
+    debugMode && finalResult.pipelineKey
+      ? pipelineByKey.get(finalResult.pipelineKey)?.label ||
+        finalResult.pipelineKey
+      : "";
 
   const clearRecording = useCallback(() => {
     setRecordedWavBlob(null);
@@ -638,16 +618,9 @@ export function App() {
       }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
-      setStatus(nextStatus ?? IDLE_STATUS);
+      setStatus(nextStatus ?? "idle");
     },
-    [
-      IDLE_STATUS,
-      decoder,
-      dispatchCandidates,
-      resetDisplays,
-      setFinalResult,
-      stopRecording,
-    ],
+    [decoder, dispatchCandidates, resetDisplays, setFinalResult, stopRecording],
   );
 
   const logTones = useCallback(() => {
@@ -1132,6 +1105,7 @@ export function App() {
   }, [decoder, handleFrameEvent, handlePreviewEvent, handleStateEvent]);
 
   useEffect(() => {
+    const decoderInstance = decoderRef.current;
     return () => {
       const recorder = recorderRef.current;
       try {
@@ -1143,7 +1117,7 @@ export function App() {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
-      decoderRef.current?.stop().catch(() => undefined);
+      decoderInstance?.stop().catch(() => undefined);
     };
   }, []);
 
@@ -1152,8 +1126,8 @@ export function App() {
     previewClassNames.push(previewIsProvisional ? "provisional" : "decoded-ok");
   }
 
-  const previewLabelHidden = !previewLabel;
-  const finalLabelHidden = !finalLabel;
+  const previewLabelHidden = !debugMode || !previewLabel;
+  const finalLabelHidden = !debugMode || !finalLabel;
 
   const downloadTitle = mediaRecorderSupported
     ? undefined
