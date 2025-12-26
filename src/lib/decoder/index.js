@@ -8,7 +8,20 @@ const END_MARK_BITS = Array.from(
   (_, i) => (END_CODE >> (CODE_BITS - 1 - i)) & 1,
 );
 
+// Default: 4FSK only (for backward compatibility)
 const DEFAULT_FREQS_SETS = [
+  [2349.32, 2637.02, 2959.96, 3322.44], // Bank A - 4FSK
+  [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
+];
+
+// BFSK frequency sets (can be used instead of 4FSK)
+export const BFSK_FREQS_SETS = [
+  [2205.00, 3150.00], // Bank A - BFSK
+  [2205.00, 3150.00], // Bank B - BFSK
+];
+
+// Hybrid: Both 4FSK and BFSK simultaneously
+export const HYBRID_FREQS_SETS = [
   [2349.32, 2637.02, 2959.96, 3322.44], // Bank A - 4FSK
   [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
   [2205.00, 3150.00],                    // Bank C - BFSK
@@ -33,12 +46,9 @@ const DEFAULT_GAIN_CONFIG = {
 };
 
 const DEFAULT_SCORE_MIN = 0.2;
-const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((freqs, idx) => {
-  // 4FSK banks (A, B) use different thresholds
-  if (freqs.length === 4) return idx === 0 ? 0.28 : 0.18;
-  // BFSK banks (C, D) use slightly lower threshold
-  return 0.20;
-});
+const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((_, idx) =>
+  idx === 0 ? 0.28 : 0.18,
+);
 
 const DEFAULT_WORKLET_URL = "/mb-fesk-worklet.js";
 
@@ -83,12 +93,8 @@ function buildDetectorConfig(freqSets) {
       harmonicMultipliers: [1, 2, 3, 4],
       detuneFactors: [0.99, 1, 1.01],
     };
-    // Bank B (4FSK) uses wider detuning
-    if (idx === 1) {
-      config.detuneFactors = [0.97, 0.985, 1, 1.015, 1.03];
-    }
-    // Bank D (BFSK) uses wider detuning
-    if (idx === 3) {
+    // Every second bank (B, D, etc.) uses wider detuning
+    if (idx % 2 === 1) {
       config.detuneFactors = [0.97, 0.985, 1, 1.015, 1.03];
     }
     return config;

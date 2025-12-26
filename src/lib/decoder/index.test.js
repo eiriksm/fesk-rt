@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_FESK_DECODER_CONFIG, __testUtils } from "./index.js";
+import {
+  DEFAULT_FESK_DECODER_CONFIG,
+  BFSK_FREQS_SETS,
+  HYBRID_FREQS_SETS,
+  __testUtils,
+} from "./index.js";
 
 const {
   bitsToCodes,
@@ -24,26 +29,16 @@ describe("decoder internals", () => {
     const config = DEFAULT_FESK_DECODER_CONFIG;
 
     expect(config.freqSets).toEqual([
-      [2349.32, 2637.02, 2959.96, 3322.44], // Bank A - 4FSK
-      [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
-      [2205.00, 3150.00],                    // Bank C - BFSK
-      [2205.00, 3150.00],                    // Bank D - BFSK
+      [2349.32, 2637.02, 2959.96, 3322.44],
+      [2349.32, 2637.02, 2959.96, 3322.44],
     ]);
 
-    expect(config.detectorConfig).toHaveLength(4);
+    expect(config.detectorConfig).toHaveLength(2);
     expect(config.detectorConfig[0]).toMatchObject({
       harmonicMultipliers: [1, 2, 3, 4],
       detuneFactors: [0.99, 1, 1.01],
     });
     expect(config.detectorConfig[1]).toMatchObject({
-      harmonicMultipliers: [1, 2, 3, 4],
-      detuneFactors: [0.97, 0.985, 1, 1.015, 1.03],
-    });
-    expect(config.detectorConfig[2]).toMatchObject({
-      harmonicMultipliers: [1, 2, 3, 4],
-      detuneFactors: [0.99, 1, 1.01],
-    });
-    expect(config.detectorConfig[3]).toMatchObject({
       harmonicMultipliers: [1, 2, 3, 4],
       detuneFactors: [0.97, 0.985, 1, 1.015, 1.03],
     });
@@ -60,7 +55,7 @@ describe("decoder internals", () => {
     });
 
     expect(config.scoreMin).toBeCloseTo(0.2, 5);
-    expect(config.scoreMinBank).toEqual([0.28, 0.18, 0.20, 0.20]);
+    expect(config.scoreMinBank).toEqual([0.28, 0.18]);
 
     const gain0 = config.pipelineDefs.find((def) => def.key === "bank-0-gain0");
     const gain1 = config.pipelineDefs.find((def) => def.key === "bank-0-gain1");
@@ -99,21 +94,10 @@ describe("decoder internals", () => {
       sampleGain: 16,
     });
 
-    // Check BFSK bank
-    const bfskGain0 = config.pipelineDefs.find((def) => def.key === "bank-2-gain0");
-    expect(bfskGain0).toMatchObject({
-      label: "Bank C (BFSK)",
-      modulationType: "BFSK",
-      micGain: 1,
-      sampleGain: 1,
-    });
-
     const thresholds = config.pipelineThresholds;
     expect(thresholds.get("bank-0-gain0")).toBeCloseTo(0.28, 5);
     expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.18, 5);
     expect(thresholds.get("bank-1-gain4")).toBeCloseTo(0.18, 5);
-    expect(thresholds.get("bank-2-gain0")).toBeCloseTo(0.20, 5);
-    expect(thresholds.get("bank-3-gain0")).toBeCloseTo(0.20, 5);
   });
 
   it("converts bit streams into codes and decoded text", () => {
@@ -174,5 +158,35 @@ describe("decoder internals", () => {
     expect(thresholds.get("bank-0-gain0")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-0-gain1")).toBeCloseTo(0.9, 5);
     expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.25, 5);
+  });
+
+  it("supports BFSK and hybrid frequency configurations", () => {
+    // BFSK configuration (2 frequencies per bank)
+    expect(BFSK_FREQS_SETS).toHaveLength(2);
+    expect(BFSK_FREQS_SETS[0]).toHaveLength(2);
+    expect(BFSK_FREQS_SETS[1]).toHaveLength(2);
+
+    const bfskDefs = buildPipelineDefs(BFSK_FREQS_SETS);
+    expect(bfskDefs[0]).toMatchObject({
+      modulationType: "BFSK",
+      label: "Bank A (BFSK)",
+    });
+
+    // Hybrid configuration (2 4FSK banks + 2 BFSK banks)
+    expect(HYBRID_FREQS_SETS).toHaveLength(4);
+    expect(HYBRID_FREQS_SETS[0]).toHaveLength(4); // 4FSK
+    expect(HYBRID_FREQS_SETS[1]).toHaveLength(4); // 4FSK
+    expect(HYBRID_FREQS_SETS[2]).toHaveLength(2); // BFSK
+    expect(HYBRID_FREQS_SETS[3]).toHaveLength(2); // BFSK
+
+    const hybridDefs = buildPipelineDefs(HYBRID_FREQS_SETS);
+    expect(hybridDefs[0]).toMatchObject({
+      modulationType: "4FSK",
+      label: "Bank A (4FSK)",
+    });
+    expect(hybridDefs[10]).toMatchObject({
+      modulationType: "BFSK",
+      label: "Bank C (BFSK)",
+    });
   });
 });
