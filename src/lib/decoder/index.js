@@ -14,18 +14,13 @@ const DEFAULT_FREQS_SETS = [
   [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
 ];
 
-// BFSK frequency sets (can be used instead of 4FSK)
-export const BFSK_FREQS_SETS = [
-  [2205.00, 3150.00], // Bank A - BFSK
-  [2205.00, 3150.00], // Bank B - BFSK
-];
+// BFSK frequency sets (derived from 4FSK - first 2 frequencies)
+export const BFSK_FREQS_SETS = DEFAULT_FREQS_SETS.map((set) => set.slice(0, 2));
 
 // Hybrid: Both 4FSK and BFSK simultaneously
 export const HYBRID_FREQS_SETS = [
-  [2349.32, 2637.02, 2959.96, 3322.44], // Bank A - 4FSK
-  [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
-  [2205.00, 3150.00],                    // Bank C - BFSK
-  [2205.00, 3150.00],                    // Bank D - BFSK
+  ...DEFAULT_FREQS_SETS,                 // Banks A-B: 4FSK
+  ...BFSK_FREQS_SETS,                    // Banks C-D: BFSK
 ];
 
 const DEFAULT_ENERGY = {

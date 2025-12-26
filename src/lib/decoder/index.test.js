@@ -161,10 +161,10 @@ describe("decoder internals", () => {
   });
 
   it("supports BFSK and hybrid frequency configurations", () => {
-    // BFSK configuration (2 frequencies per bank)
+    // BFSK configuration (derived from 4FSK - first 2 frequencies)
     expect(BFSK_FREQS_SETS).toHaveLength(2);
-    expect(BFSK_FREQS_SETS[0]).toHaveLength(2);
-    expect(BFSK_FREQS_SETS[1]).toHaveLength(2);
+    expect(BFSK_FREQS_SETS[0]).toEqual([2349.32, 2637.02]);
+    expect(BFSK_FREQS_SETS[1]).toEqual([2349.32, 2637.02]);
 
     const bfskDefs = buildPipelineDefs(BFSK_FREQS_SETS);
     expect(bfskDefs[0]).toMatchObject({
@@ -174,10 +174,10 @@ describe("decoder internals", () => {
 
     // Hybrid configuration (2 4FSK banks + 2 BFSK banks)
     expect(HYBRID_FREQS_SETS).toHaveLength(4);
-    expect(HYBRID_FREQS_SETS[0]).toHaveLength(4); // 4FSK
-    expect(HYBRID_FREQS_SETS[1]).toHaveLength(4); // 4FSK
-    expect(HYBRID_FREQS_SETS[2]).toHaveLength(2); // BFSK
-    expect(HYBRID_FREQS_SETS[3]).toHaveLength(2); // BFSK
+    expect(HYBRID_FREQS_SETS[0]).toEqual([2349.32, 2637.02, 2959.96, 3322.44]); // 4FSK
+    expect(HYBRID_FREQS_SETS[1]).toEqual([2349.32, 2637.02, 2959.96, 3322.44]); // 4FSK
+    expect(HYBRID_FREQS_SETS[2]).toEqual([2349.32, 2637.02]); // BFSK
+    expect(HYBRID_FREQS_SETS[3]).toEqual([2349.32, 2637.02]); // BFSK
 
     const hybridDefs = buildPipelineDefs(HYBRID_FREQS_SETS);
     expect(hybridDefs[0]).toMatchObject({
