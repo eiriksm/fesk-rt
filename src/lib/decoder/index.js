@@ -9,8 +9,10 @@ const END_MARK_BITS = Array.from(
 );
 
 const DEFAULT_FREQS_SETS = [
-  [2349.32, 2637.02, 2959.96, 3322.44],
-  [2349.32, 2637.02, 2959.96, 3322.44],
+  [2349.32, 2637.02, 2959.96, 3322.44], // Bank A - 4FSK
+  [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
+  [2205.00, 3150.00],                    // Bank C - BFSK
+  [2205.00, 3150.00],                    // Bank D - BFSK
 ];
 
 const DEFAULT_ENERGY = {
@@ -31,9 +33,12 @@ const DEFAULT_GAIN_CONFIG = {
 };
 
 const DEFAULT_SCORE_MIN = 0.2;
-const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((_, idx) =>
-  idx === 0 ? 0.28 : 0.18,
-);
+const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((freqs, idx) => {
+  // 4FSK banks (A, B) use different thresholds
+  if (freqs.length === 4) return idx === 0 ? 0.28 : 0.18;
+  // BFSK banks (C, D) use slightly lower threshold
+  return 0.20;
+});
 
 const DEFAULT_WORKLET_URL = "/mb-fesk-worklet.js";
 
@@ -78,7 +83,12 @@ function buildDetectorConfig(freqSets) {
       harmonicMultipliers: [1, 2, 3, 4],
       detuneFactors: [0.99, 1, 1.01],
     };
+    // Bank B (4FSK) uses wider detuning
     if (idx === 1) {
+      config.detuneFactors = [0.97, 0.985, 1, 1.015, 1.03];
+    }
+    // Bank D (BFSK) uses wider detuning
+    if (idx === 3) {
       config.detuneFactors = [0.97, 0.985, 1, 1.015, 1.03];
     }
     return config;
@@ -93,8 +103,10 @@ function buildPipelineDefs(freqSets, options = {}) {
   } = options;
 
   const defs = [];
-  freqSets.forEach((_, idx) => {
+  freqSets.forEach((freqs, idx) => {
     const baseLabel = bankLabel(idx);
+    // Detect modulation type based on frequency count
+    const modulationType = freqs.length === 2 ? "BFSK" : "4FSK";
     gainMultipliers.forEach((multiplier, gainIdx) => {
       const isBase = multiplier === 1;
       const gainLabel = isBase ? "" : ` ×${multiplier}`;
@@ -102,7 +114,8 @@ function buildPipelineDefs(freqSets, options = {}) {
       defs.push({
         key: `bank-${idx}-gain${gainIdx}`,
         baseBankIndex: idx,
-        label: `Bank ${baseLabel}${gainLabel}`,
+        modulationType,
+        label: `Bank ${baseLabel} (${modulationType})${gainLabel}`,
         shortLabel: `${baseLabel}${shortGainLabel}`,
         micGain: micBase * multiplier,
         sampleGain: sampleBase * multiplier,
@@ -538,15 +551,21 @@ export function createFeskDecoder(overrides = {}) {
     return null;
   }
 
-  function feedOne(dec, symIdx, score) {
-    // FESK4: symbol index 0-3 encodes 2 bits
-    if (symIdx < 0 || symIdx > 3) return null;
-    const bit0 = (symIdx >> 1) & 1;  // MSB
-    const bit1 = symIdx & 1;          // LSB
-    // Feed both bits in sequence
-    const result0 = feedBit(dec, bit0, score);
-    if (result0) return result0;
-    return feedBit(dec, bit1, score);
+  function feedOne(dec, symIdx, score, modulationType) {
+    if (modulationType === "BFSK") {
+      // BFSK: symbol index 0-1 encodes 1 bit
+      if (symIdx < 0 || symIdx > 1) return null;
+      return feedBit(dec, symIdx, score);
+    } else {
+      // 4FSK: symbol index 0-3 encodes 2 bits
+      if (symIdx < 0 || symIdx > 3) return null;
+      const bit0 = (symIdx >> 1) & 1;  // MSB
+      const bit1 = symIdx & 1;          // LSB
+      // Feed both bits in sequence
+      const result0 = feedBit(dec, bit0, score);
+      if (result0) return result0;
+      return feedBit(dec, bit1, score);
+    }
   }
 
   function allPipelinesReady() {
@@ -637,7 +656,7 @@ export function createFeskDecoder(overrides = {}) {
       emitState({ kind: "freq", pipelineKey: def.key, freqHz: displayFreq });
 
       if ((r.score ?? 0) < threshold) continue;
-      const out = Number.isFinite(r.idx) ? feedOne(dec, r.idx, r.score) : null;
+      const out = Number.isFinite(r.idx) ? feedOne(dec, r.idx, r.score, def.modulationType) : null;
       if (!out) continue;
 
       events.emit("frame", {
