@@ -121,3 +121,6 @@ export interface FeskDecoder {
 export declare function createFeskDecoder(overrides?: unknown): FeskDecoder;
 
 export declare const DEFAULT_FESK_DECODER_CONFIG: FeskDecoderConfig;
+
+export declare const BFSK_FREQS_SETS: number[][];
+export declare const HYBRID_FREQS_SETS: number[][];

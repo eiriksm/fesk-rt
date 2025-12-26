@@ -10,6 +10,8 @@ import {
 import { DebugMetrics } from "./components/DebugMetrics";
 import {
   createFeskDecoder,
+  BFSK_FREQS_SETS,
+  HYBRID_FREQS_SETS,
   type DecoderFrameEvent,
   type DecoderPreviewEvent,
   type DecoderStateEvent,
@@ -356,7 +358,22 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 }
 
 export function App() {
-  const decoderRef = useRef<FeskDecoder>(createFeskDecoder());
+  // Read modulation from URL parameters
+  const modulation = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("modulation") || "";
+  }, []);
+
+  // Create decoder with appropriate frequency sets
+  const decoderRef = useRef<FeskDecoder>(
+    createFeskDecoder(
+      modulation === "bfsk"
+        ? { freqSets: BFSK_FREQS_SETS }
+        : modulation === "hybrid"
+          ? { freqSets: HYBRID_FREQS_SETS }
+          : {},
+    ),
+  );
   const decoder = decoderRef.current;
   const pipelineDefs = useMemo<PipelineDefinition[]>(
     () => decoder.config.pipelineDefs,
