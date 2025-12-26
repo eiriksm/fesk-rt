@@ -11,7 +11,7 @@ import { DebugMetrics } from "./components/DebugMetrics";
 import {
   createFeskDecoder,
   BFSK_FREQS_SETS,
-  FREQS_SETS_4FSK,
+  HYBRID_FREQS_SETS,
   type DecoderFrameEvent,
   type DecoderPreviewEvent,
   type DecoderStateEvent,
@@ -365,16 +365,16 @@ export function App() {
   }, []);
 
   // Create decoder with appropriate frequency sets
-  // Default: hybrid (both 4FSK and BFSK)
-  // ?modulation=4fsk: 4FSK only
+  // Default: 4FSK only
   // ?modulation=bfsk: BFSK only
+  // ?modulation=hybrid: Both 4FSK and BFSK
   const decoderRef = useRef<FeskDecoder>(
     createFeskDecoder(
-      modulation === "4fsk"
-        ? { freqSets: FREQS_SETS_4FSK }
-        : modulation === "bfsk"
-          ? { freqSets: BFSK_FREQS_SETS }
-          : {}, // Default hybrid
+      modulation === "bfsk"
+        ? { freqSets: BFSK_FREQS_SETS }
+        : modulation === "hybrid"
+          ? { freqSets: HYBRID_FREQS_SETS }
+          : {}, // Default 4FSK
     ),
   );
   const decoder = decoderRef.current;

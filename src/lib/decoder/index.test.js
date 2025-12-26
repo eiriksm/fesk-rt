@@ -26,31 +26,21 @@ function codesToBits(codes) {
 }
 
 describe("decoder internals", () => {
-  it("default configuration is hybrid (4FSK + BFSK)", () => {
+  it("default configuration is 4FSK only", () => {
     const config = DEFAULT_FESK_DECODER_CONFIG;
 
-    // Default is now hybrid: 2 4FSK banks + 2 BFSK banks
+    // Default is 4FSK only for CI stability
     expect(config.freqSets).toEqual([
       [2349.32, 2637.02, 2959.96, 3322.44], // Bank A - 4FSK
       [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
-      [2349.32, 2637.02],                    // Bank C - BFSK
-      [2349.32, 2637.02],                    // Bank D - BFSK
     ]);
 
-    expect(config.detectorConfig).toHaveLength(4);
+    expect(config.detectorConfig).toHaveLength(2);
     expect(config.detectorConfig[0]).toMatchObject({
       harmonicMultipliers: [1, 2, 3, 4],
       detuneFactors: [0.99, 1, 1.01],
     });
     expect(config.detectorConfig[1]).toMatchObject({
-      harmonicMultipliers: [1, 2, 3, 4],
-      detuneFactors: [0.97, 0.985, 1, 1.015, 1.03],
-    });
-    expect(config.detectorConfig[2]).toMatchObject({
-      harmonicMultipliers: [1, 2, 3, 4],
-      detuneFactors: [0.99, 1, 1.01],
-    });
-    expect(config.detectorConfig[3]).toMatchObject({
       harmonicMultipliers: [1, 2, 3, 4],
       detuneFactors: [0.97, 0.985, 1, 1.015, 1.03],
     });
@@ -67,7 +57,7 @@ describe("decoder internals", () => {
     });
 
     expect(config.scoreMin).toBeCloseTo(0.2, 5);
-    expect(config.scoreMinBank).toEqual([0.28, 0.18, 0.28, 0.18]);
+    expect(config.scoreMinBank).toEqual([0.28, 0.18]);
 
     // Check 4FSK bank
     const gain0 = config.pipelineDefs.find((def) => def.key === "bank-0-gain0");
@@ -78,20 +68,9 @@ describe("decoder internals", () => {
       sampleGain: 1,
     });
 
-    // Check BFSK bank
-    const bfskGain0 = config.pipelineDefs.find((def) => def.key === "bank-2-gain0");
-    expect(bfskGain0).toMatchObject({
-      label: "Bank C (BFSK)",
-      modulationType: "BFSK",
-      micGain: 1,
-      sampleGain: 1,
-    });
-
     const thresholds = config.pipelineThresholds;
     expect(thresholds.get("bank-0-gain0")).toBeCloseTo(0.28, 5);
     expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.18, 5);
-    expect(thresholds.get("bank-2-gain0")).toBeCloseTo(0.28, 5);
-    expect(thresholds.get("bank-3-gain0")).toBeCloseTo(0.18, 5);
   });
 
   it("converts bit streams into codes and decoded text", () => {

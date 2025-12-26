@@ -23,8 +23,8 @@ export const HYBRID_FREQS_SETS = [
   ...BFSK_FREQS_SETS,                    // Banks C-D: BFSK
 ];
 
-// Default: Hybrid mode (both 4FSK and BFSK)
-const DEFAULT_FREQS_SETS = HYBRID_FREQS_SETS;
+// Default: 4FSK only (hybrid is too heavy for CI with 20 pipelines)
+const DEFAULT_FREQS_SETS = FREQS_SETS_4FSK;
 
 const DEFAULT_ENERGY = {
   floor: 5e-7,
@@ -44,12 +44,9 @@ const DEFAULT_GAIN_CONFIG = {
 };
 
 const DEFAULT_SCORE_MIN = 0.2;
-const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((freqs, idx) => {
-  // 4FSK banks (A, B) use tuned thresholds
-  if (freqs.length === 4) return idx === 0 ? 0.28 : 0.18;
-  // BFSK banks (C, D) use tuned thresholds
-  return idx === 2 ? 0.28 : 0.18;
-});
+const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((_, idx) =>
+  idx === 0 ? 0.28 : 0.18,
+);
 
 const DEFAULT_WORKLET_URL = "/mb-fesk-worklet.js";
 
