@@ -8,20 +8,23 @@ const END_MARK_BITS = Array.from(
   (_, i) => (END_CODE >> (CODE_BITS - 1 - i)) & 1,
 );
 
-// Default: 4FSK only (for backward compatibility)
-const DEFAULT_FREQS_SETS = [
+// 4FSK frequency sets
+export const FREQS_SETS_4FSK = [
   [2349.32, 2637.02, 2959.96, 3322.44], // Bank A - 4FSK
   [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
 ];
 
 // BFSK frequency sets (derived from 4FSK - first 2 frequencies)
-export const BFSK_FREQS_SETS = DEFAULT_FREQS_SETS.map((set) => set.slice(0, 2));
+export const BFSK_FREQS_SETS = FREQS_SETS_4FSK.map((set) => set.slice(0, 2));
 
 // Hybrid: Both 4FSK and BFSK simultaneously
 export const HYBRID_FREQS_SETS = [
-  ...DEFAULT_FREQS_SETS,                 // Banks A-B: 4FSK
+  ...FREQS_SETS_4FSK,                    // Banks A-B: 4FSK
   ...BFSK_FREQS_SETS,                    // Banks C-D: BFSK
 ];
+
+// Default: Hybrid mode (both 4FSK and BFSK)
+const DEFAULT_FREQS_SETS = HYBRID_FREQS_SETS;
 
 const DEFAULT_ENERGY = {
   floor: 5e-7,
@@ -41,9 +44,12 @@ const DEFAULT_GAIN_CONFIG = {
 };
 
 const DEFAULT_SCORE_MIN = 0.2;
-const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((_, idx) =>
-  idx === 0 ? 0.28 : 0.18,
-);
+const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((freqs, idx) => {
+  // 4FSK banks (A, B) use tuned thresholds
+  if (freqs.length === 4) return idx === 0 ? 0.28 : 0.18;
+  // BFSK banks (C, D) use tuned thresholds
+  return idx === 2 ? 0.28 : 0.18;
+});
 
 const DEFAULT_WORKLET_URL = "/mb-fesk-worklet.js";
 
