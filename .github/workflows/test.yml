@@ -120,7 +120,7 @@ jobs:
             fakeAudioCapture: public/samples/sample5.wav
             expectedText: uptime 408 seconds
             recordDurationMs: 17000
-            modulation: bfsk
+            # modulation: bfsk  # Temporarily test without BFSK to see if it's actually 4FSK
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
