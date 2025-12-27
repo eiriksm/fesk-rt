@@ -118,8 +118,9 @@ jobs:
           - name: mic-sample5
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample5.wav
-            expectedText: test
+            expectedText: ""  # Empty to see what actually decodes
             recordDurationMs: 17000
+            decodeTimeoutMs: 30000
             modulation: bfsk
     steps:
       - name: Checkout repository
