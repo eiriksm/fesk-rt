@@ -10,6 +10,9 @@ import {
 import { DebugMetrics } from "./components/DebugMetrics";
 import {
   createFeskDecoder,
+  FREQS_SETS_4FSK,
+  BFSK_FREQS_SETS,
+  HYBRID_FREQS_SETS,
   type DecoderFrameEvent,
   type DecoderPreviewEvent,
   type DecoderStateEvent,
@@ -24,6 +27,7 @@ const SAMPLE_WAV_CONFIG = [
   { url: "sample2.wav" },
   { url: "sample3.wav" },
   { url: "sample4.wav" },
+  { url: "sample5.wav" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
@@ -356,8 +360,38 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 }
 
 export function App() {
-  const decoderRef = useRef<FeskDecoder>(createFeskDecoder());
-  const decoder = decoderRef.current;
+  // Read initial modulation from URL parameters, fallback to "hybrid"
+  const initialModulation = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlMode = params.get("modulation");
+    if (urlMode === "4fsk" || urlMode === "bfsk" || urlMode === "hybrid") {
+      return urlMode;
+    }
+    return "hybrid"; // Default mode
+  }, []);
+
+  // Modulation mode state
+  const [modulationMode, setModulationMode] = useState<
+    "4fsk" | "bfsk" | "hybrid"
+  >(initialModulation);
+
+  // Helper to get frequency sets for a modulation mode
+  const getFreqSetsForMode = useCallback((mode: "4fsk" | "bfsk" | "hybrid") => {
+    switch (mode) {
+      case "4fsk":
+        return FREQS_SETS_4FSK;
+      case "bfsk":
+        return BFSK_FREQS_SETS;
+      case "hybrid":
+        return HYBRID_FREQS_SETS;
+    }
+  }, []);
+
+  // Create decoder with appropriate frequency sets
+  const decoderRef = useRef<FeskDecoder>(
+    createFeskDecoder({ freqSets: getFreqSetsForMode(modulationMode) }),
+  );
+  const [decoder, setDecoder] = useState<FeskDecoder>(decoderRef.current);
   const pipelineDefs = useMemo<PipelineDefinition[]>(
     () => decoder.config.pipelineDefs,
     [decoder],
@@ -417,6 +451,51 @@ export function App() {
     setFrequencies(createInitialDisplayMap(pipelineDefs));
     setPipelineStatuses(createInitialDisplayMap(pipelineDefs));
   }, [pipelineDefs]);
+
+  // Handle modulation mode changes - recreate decoder
+  useEffect(() => {
+    const currentFreqSets = decoder.config.freqSets;
+    const newFreqSets = getFreqSetsForMode(modulationMode);
+
+    // Check if frequency sets actually changed
+    if (JSON.stringify(currentFreqSets) === JSON.stringify(newFreqSets)) {
+      return;
+    }
+
+    // Stop old decoder if running
+    if (runMode !== "idle") {
+      console.info("Stopping decoder to change modulation mode");
+      decoder.stop().catch(console.error);
+    }
+
+    // Create new decoder with new frequency sets
+    const newDecoder = createFeskDecoder({ freqSets: newFreqSets });
+    decoderRef.current = newDecoder;
+    setDecoder(newDecoder);
+
+    console.info(`Modulation mode changed to: ${modulationMode.toUpperCase()}`);
+  }, [modulationMode, getFreqSetsForMode, decoder, runMode]);
+
+  // Handler for changing modulation mode
+  const handleModulationChange = useCallback(
+    (mode: "4fsk" | "bfsk" | "hybrid") => {
+      if (runMode !== "idle") {
+        alert("Please stop the decoder before changing modulation mode");
+        return;
+      }
+      setModulationMode(mode);
+
+      // Update URL to reflect the new mode
+      const url = new URL(window.location.href);
+      url.searchParams.set("modulation", mode);
+      window.history.pushState({}, "", url.toString());
+
+      // Reset displays when mode changes
+      dispatchCandidates({ type: "reset" });
+      setFinalResult({ pipelineKey: null, text: "" });
+    },
+    [runMode],
+  );
 
   const startDisabled = isBusy || runMode !== "idle";
   const stopDisabled = isBusy || runMode === "idle";
@@ -1151,6 +1230,42 @@ export function App() {
         >
           {downloadLabel}
         </button>
+        <div className="modulation-selector">
+          <span className="modulation-label">Mode:</span>
+          <label className={modulationMode === "4fsk" ? "active" : ""}>
+            <input
+              type="radio"
+              name="modulation"
+              value="4fsk"
+              checked={modulationMode === "4fsk"}
+              onChange={() => handleModulationChange("4fsk")}
+              disabled={runMode !== "idle"}
+            />
+            4FSK
+          </label>
+          <label className={modulationMode === "bfsk" ? "active" : ""}>
+            <input
+              type="radio"
+              name="modulation"
+              value="bfsk"
+              checked={modulationMode === "bfsk"}
+              onChange={() => handleModulationChange("bfsk")}
+              disabled={runMode !== "idle"}
+            />
+            BFSK
+          </label>
+          <label className={modulationMode === "hybrid" ? "active" : ""}>
+            <input
+              type="radio"
+              name="modulation"
+              value="hybrid"
+              checked={modulationMode === "hybrid"}
+              onChange={() => handleModulationChange("hybrid")}
+              disabled={runMode !== "idle"}
+            />
+            Hybrid
+          </label>
+        </div>
       </div>
       <details className="debug-panel" hidden={!debugMode}>
         <summary>Debug</summary>

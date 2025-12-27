@@ -55,4 +55,14 @@ describe("FESK real time with known samples", () => {
       .should("be.visible")
       .and("have.text", "WebP");
   });
+
+  it("should decode audio from sample 5 (BFSK)", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 2000 }).click();
+    cy.get("#sample5Btn").click();
+    cy.get("#out .decoded-ok", { timeout: 30000 })
+      .should("not.be.empty")
+      .should("contain.text", "test");
+  });
 });
