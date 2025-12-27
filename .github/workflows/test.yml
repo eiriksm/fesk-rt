@@ -121,7 +121,7 @@ jobs:
             expectedText: test
             recordDurationMs: 17000
             decodeTimeoutMs: 30000
-            modulation: bfsk
+            modulation: hybrid
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
