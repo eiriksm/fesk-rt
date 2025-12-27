@@ -14,8 +14,11 @@ export const FREQS_SETS_4FSK = [
   [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
 ];
 
-// BFSK frequency sets (derived from 4FSK - first 2 frequencies)
-export const BFSK_FREQS_SETS = FREQS_SETS_4FSK.map((set) => set.slice(0, 2));
+// BFSK frequency sets (from main branch - original BFSK frequencies)
+export const BFSK_FREQS_SETS = [
+  [2490.2, 3134.8],  // Bank A - BFSK
+  [7394.0, 9313.0],  // Bank B - BFSK
+];
 
 // Hybrid: Both 4FSK and BFSK simultaneously
 export const HYBRID_FREQS_SETS = [

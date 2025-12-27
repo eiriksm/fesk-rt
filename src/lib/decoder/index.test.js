@@ -145,10 +145,10 @@ describe("decoder internals", () => {
       label: "Bank A (4FSK)",
     });
 
-    // BFSK configuration (derived from 4FSK - first 2 frequencies)
+    // BFSK configuration (from main branch - original BFSK frequencies)
     expect(BFSK_FREQS_SETS).toHaveLength(2);
-    expect(BFSK_FREQS_SETS[0]).toEqual([2349.32, 2637.02]);
-    expect(BFSK_FREQS_SETS[1]).toEqual([2349.32, 2637.02]);
+    expect(BFSK_FREQS_SETS[0]).toEqual([2490.2, 3134.8]);
+    expect(BFSK_FREQS_SETS[1]).toEqual([7394.0, 9313.0]);
 
     const bfskDefs = buildPipelineDefs(BFSK_FREQS_SETS);
     expect(bfskDefs[0]).toMatchObject({
@@ -160,8 +160,8 @@ describe("decoder internals", () => {
     expect(HYBRID_FREQS_SETS).toHaveLength(4);
     expect(HYBRID_FREQS_SETS[0]).toEqual([2349.32, 2637.02, 2959.96, 3322.44]); // 4FSK
     expect(HYBRID_FREQS_SETS[1]).toEqual([2349.32, 2637.02, 2959.96, 3322.44]); // 4FSK
-    expect(HYBRID_FREQS_SETS[2]).toEqual([2349.32, 2637.02]); // BFSK
-    expect(HYBRID_FREQS_SETS[3]).toEqual([2349.32, 2637.02]); // BFSK
+    expect(HYBRID_FREQS_SETS[2]).toEqual([2490.2, 3134.8]); // BFSK
+    expect(HYBRID_FREQS_SETS[3]).toEqual([7394.0, 9313.0]); // BFSK
 
     const hybridDefs = buildPipelineDefs(HYBRID_FREQS_SETS);
     expect(hybridDefs[0]).toMatchObject({
