@@ -118,9 +118,9 @@ jobs:
           - name: mic-sample5
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample5.wav
-            expectedText: uptime 408 seconds
+            expectedText: test
             recordDurationMs: 17000
-            # modulation: bfsk  # Temporarily test without BFSK to see if it's actually 4FSK
+            modulation: bfsk
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
