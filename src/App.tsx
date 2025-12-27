@@ -481,6 +481,12 @@ export function App() {
       return;
     }
     setModulationMode(mode);
+
+    // Update URL to reflect the new mode
+    const url = new URL(window.location.href);
+    url.searchParams.set("modulation", mode);
+    window.history.pushState({}, "", url.toString());
+
     // Reset displays when mode changes
     dispatchCandidates({ type: "reset" });
     setFinalResult({ pipelineKey: null, text: "" });
