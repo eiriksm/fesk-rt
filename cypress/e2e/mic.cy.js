@@ -5,8 +5,10 @@ describe("FESK real time Test", () => {
     const recordDurationMs = Number(Cypress.env("recordDurationMs")) || 16000;
     const decodeTimeoutMs = Number(Cypress.env("decodeTimeoutMs")) || 20000;
     const expectedText = Cypress.env("expectedText") || "test";
+    const modulation = Cypress.env("modulation") || "";
 
-    cy.visit("/");
+    const url = modulation ? `/?modulation=${modulation}` : "/";
+    cy.visit(url);
 
     cy.get("#startBtn", { timeout: 10000 }).click();
     cy.wait(recordDurationMs);
