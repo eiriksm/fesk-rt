@@ -371,7 +371,9 @@ export function App() {
   }, []);
 
   // Modulation mode state
-  const [modulationMode, setModulationMode] = useState<"4fsk" | "bfsk" | "hybrid">(initialModulation);
+  const [modulationMode, setModulationMode] = useState<
+    "4fsk" | "bfsk" | "hybrid"
+  >(initialModulation);
 
   // Helper to get frequency sets for a modulation mode
   const getFreqSetsForMode = useCallback((mode: "4fsk" | "bfsk" | "hybrid") => {
@@ -475,22 +477,25 @@ export function App() {
   }, [modulationMode, getFreqSetsForMode, decoder, runMode]);
 
   // Handler for changing modulation mode
-  const handleModulationChange = useCallback((mode: "4fsk" | "bfsk" | "hybrid") => {
-    if (runMode !== "idle") {
-      alert("Please stop the decoder before changing modulation mode");
-      return;
-    }
-    setModulationMode(mode);
+  const handleModulationChange = useCallback(
+    (mode: "4fsk" | "bfsk" | "hybrid") => {
+      if (runMode !== "idle") {
+        alert("Please stop the decoder before changing modulation mode");
+        return;
+      }
+      setModulationMode(mode);
 
-    // Update URL to reflect the new mode
-    const url = new URL(window.location.href);
-    url.searchParams.set("modulation", mode);
-    window.history.pushState({}, "", url.toString());
+      // Update URL to reflect the new mode
+      const url = new URL(window.location.href);
+      url.searchParams.set("modulation", mode);
+      window.history.pushState({}, "", url.toString());
 
-    // Reset displays when mode changes
-    dispatchCandidates({ type: "reset" });
-    setFinalResult({ pipelineKey: null, text: "" });
-  }, [runMode]);
+      // Reset displays when mode changes
+      dispatchCandidates({ type: "reset" });
+      setFinalResult({ pipelineKey: null, text: "" });
+    },
+    [runMode],
+  );
 
   const startDisabled = isBusy || runMode !== "idle";
   const stopDisabled = isBusy || runMode === "idle";
