@@ -9,9 +9,10 @@ import {
 
 import { DebugMetrics } from "./components/DebugMetrics";
 import {
-  DEFAULT_FREQS_SETS_4FSK,
-  DEFAULT_FREQS_SETS_BFSK,
   createFeskDecoder,
+  FREQS_SETS_4FSK,
+  BFSK_FREQS_SETS,
+  HYBRID_FREQS_SETS,
   type DecoderFrameEvent,
   type DecoderPreviewEvent,
   type DecoderStateEvent,
@@ -26,17 +27,13 @@ const SAMPLE_WAV_CONFIG = [
   { url: "sample2.wav" },
   { url: "sample3.wav" },
   { url: "sample4.wav" },
+  { url: "sample5.wav" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
 const CANDIDATE_INACTIVITY_MS = 2200;
 const CRC_LEADER_HOLD_MS = 4500;
 const CURRENT_LEADER_STICKINESS = 0.0025;
-
-const HYBRID_FREQ_SETS = [
-  ...DEFAULT_FREQS_SETS_BFSK,
-  ...DEFAULT_FREQS_SETS_4FSK,
-];
 
 interface Candidate {
   pipelineKey: string;
@@ -363,15 +360,38 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 }
 
 export function App() {
-  const IDLE_STATUS = "Click Start to listen…";
+  // Read initial modulation from URL parameters, fallback to "hybrid"
+  const initialModulation = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlMode = params.get("modulation");
+    if (urlMode === "4fsk" || urlMode === "bfsk" || urlMode === "hybrid") {
+      return urlMode;
+    }
+    return "hybrid"; // Default mode
+  }, []);
 
-  const [decoder] = useState<FeskDecoder>(() =>
-    createFeskDecoder({ freqSets: HYBRID_FREQ_SETS }),
+  // Modulation mode state
+  const [modulationMode, setModulationMode] = useState<
+    "4fsk" | "bfsk" | "hybrid"
+  >(initialModulation);
+
+  // Helper to get frequency sets for a modulation mode
+  const getFreqSetsForMode = useCallback((mode: "4fsk" | "bfsk" | "hybrid") => {
+    switch (mode) {
+      case "4fsk":
+        return FREQS_SETS_4FSK;
+      case "bfsk":
+        return BFSK_FREQS_SETS;
+      case "hybrid":
+        return HYBRID_FREQS_SETS;
+    }
+  }, []);
+
+  // Create decoder with appropriate frequency sets
+  const decoderRef = useRef<FeskDecoder>(
+    createFeskDecoder({ freqSets: getFreqSetsForMode(modulationMode) }),
   );
-  const decoderRef = useRef<FeskDecoder>(decoder);
-  useEffect(() => {
-    decoderRef.current = decoder;
-  }, [decoder]);
+  const [decoder, setDecoder] = useState<FeskDecoder>(decoderRef.current);
   const pipelineDefs = useMemo<PipelineDefinition[]>(
     () => decoder.config.pipelineDefs,
     [decoder],
@@ -379,19 +399,6 @@ export function App() {
   const pipelineByKey = useMemo(
     () => new Map(pipelineDefs.map((def) => [def.key, def] as const)),
     [pipelineDefs],
-  );
-  const getPipelineDisplayLabel = useCallback(
-    (pipelineKey: string | null | undefined) => {
-      if (!pipelineKey) return "";
-      const def = pipelineByKey.get(pipelineKey);
-      if (!def) return "";
-      const modulation = def.modulationLabel || def.modulation?.toUpperCase?.();
-      if (modulation && def.shortLabel)
-        return `${modulation} • ${def.shortLabel}`;
-      if (modulation && def.label) return `${modulation} • ${def.label}`;
-      return def.label ?? "";
-    },
-    [pipelineByKey],
   );
   const metricDefinitions = useMemo(
     () => pipelineDefs.map((def) => ({ key: def.key, label: def.label })),
@@ -402,7 +409,7 @@ export function App() {
     return params.get("debug") === "1";
   }, []);
 
-  const [status, setStatus] = useState<string>(IDLE_STATUS);
+  const [status, setStatus] = useState<string>("idle");
   const [sampleRateText, setSampleRateText] = useState<string>("—");
   const [frequencies, setFrequencies] = useState<Record<string, string>>(() =>
     createInitialDisplayMap(pipelineDefs),
@@ -445,6 +452,51 @@ export function App() {
     setPipelineStatuses(createInitialDisplayMap(pipelineDefs));
   }, [pipelineDefs]);
 
+  // Handle modulation mode changes - recreate decoder
+  useEffect(() => {
+    const currentFreqSets = decoder.config.freqSets;
+    const newFreqSets = getFreqSetsForMode(modulationMode);
+
+    // Check if frequency sets actually changed
+    if (JSON.stringify(currentFreqSets) === JSON.stringify(newFreqSets)) {
+      return;
+    }
+
+    // Stop old decoder if running
+    if (runMode !== "idle") {
+      console.info("Stopping decoder to change modulation mode");
+      decoder.stop().catch(console.error);
+    }
+
+    // Create new decoder with new frequency sets
+    const newDecoder = createFeskDecoder({ freqSets: newFreqSets });
+    decoderRef.current = newDecoder;
+    setDecoder(newDecoder);
+
+    console.info(`Modulation mode changed to: ${modulationMode.toUpperCase()}`);
+  }, [modulationMode, getFreqSetsForMode, decoder, runMode]);
+
+  // Handler for changing modulation mode
+  const handleModulationChange = useCallback(
+    (mode: "4fsk" | "bfsk" | "hybrid") => {
+      if (runMode !== "idle") {
+        alert("Please stop the decoder before changing modulation mode");
+        return;
+      }
+      setModulationMode(mode);
+
+      // Update URL to reflect the new mode
+      const url = new URL(window.location.href);
+      url.searchParams.set("modulation", mode);
+      window.history.pushState({}, "", url.toString());
+
+      // Reset displays when mode changes
+      dispatchCandidates({ type: "reset" });
+      setFinalResult({ pipelineKey: null, text: "" });
+    },
+    [runMode],
+  );
+
   const startDisabled = isBusy || runMode !== "idle";
   const stopDisabled = isBusy || runMode === "idle";
   const sampleButtonsDisabled = isBusy || runMode !== "idle";
@@ -455,14 +507,21 @@ export function App() {
   const previewCandidate =
     candidateState.displayedKey &&
     candidateState.candidates.get(candidateState.displayedKey || "");
-  const previewFallback = status || "Listening…";
-  const previewText = previewCandidate?.text ?? previewFallback;
-  const previewLabel = getPipelineDisplayLabel(previewCandidate?.pipelineKey);
+  const previewText = previewCandidate?.text ?? "";
+  const previewLabel =
+    debugMode && previewCandidate
+      ? pipelineByKey.get(previewCandidate.pipelineKey)?.label ||
+        previewCandidate.pipelineKey
+      : "";
   const previewIsProvisional = previewCandidate
     ? previewCandidate.provisional || !previewCandidate.crcOk
     : false;
 
-  const finalLabel = getPipelineDisplayLabel(finalResult.pipelineKey);
+  const finalLabel =
+    debugMode && finalResult.pipelineKey
+      ? pipelineByKey.get(finalResult.pipelineKey)?.label ||
+        finalResult.pipelineKey
+      : "";
 
   const clearRecording = useCallback(() => {
     setRecordedWavBlob(null);
@@ -638,16 +697,9 @@ export function App() {
       }
       autoStopTriggeredRef.current = false;
       setRunMode("idle");
-      setStatus(nextStatus ?? IDLE_STATUS);
+      setStatus(nextStatus ?? "idle");
     },
-    [
-      IDLE_STATUS,
-      decoder,
-      dispatchCandidates,
-      resetDisplays,
-      setFinalResult,
-      stopRecording,
-    ],
+    [decoder, dispatchCandidates, resetDisplays, setFinalResult, stopRecording],
   );
 
   const logTones = useCallback(() => {
@@ -1132,6 +1184,7 @@ export function App() {
   }, [decoder, handleFrameEvent, handlePreviewEvent, handleStateEvent]);
 
   useEffect(() => {
+    const decoderInstance = decoderRef.current;
     return () => {
       const recorder = recorderRef.current;
       try {
@@ -1143,7 +1196,7 @@ export function App() {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
-      decoderRef.current?.stop().catch(() => undefined);
+      decoderInstance?.stop().catch(() => undefined);
     };
   }, []);
 
@@ -1152,8 +1205,8 @@ export function App() {
     previewClassNames.push(previewIsProvisional ? "provisional" : "decoded-ok");
   }
 
-  const previewLabelHidden = !previewLabel;
-  const finalLabelHidden = !finalLabel;
+  const previewLabelHidden = !debugMode || !previewLabel;
+  const finalLabelHidden = !debugMode || !finalLabel;
 
   const downloadTitle = mediaRecorderSupported
     ? undefined
@@ -1177,6 +1230,42 @@ export function App() {
         >
           {downloadLabel}
         </button>
+        <div className="modulation-selector">
+          <span className="modulation-label">Mode:</span>
+          <label className={modulationMode === "4fsk" ? "active" : ""}>
+            <input
+              type="radio"
+              name="modulation"
+              value="4fsk"
+              checked={modulationMode === "4fsk"}
+              onChange={() => handleModulationChange("4fsk")}
+              disabled={runMode !== "idle"}
+            />
+            4FSK
+          </label>
+          <label className={modulationMode === "bfsk" ? "active" : ""}>
+            <input
+              type="radio"
+              name="modulation"
+              value="bfsk"
+              checked={modulationMode === "bfsk"}
+              onChange={() => handleModulationChange("bfsk")}
+              disabled={runMode !== "idle"}
+            />
+            BFSK
+          </label>
+          <label className={modulationMode === "hybrid" ? "active" : ""}>
+            <input
+              type="radio"
+              name="modulation"
+              value="hybrid"
+              checked={modulationMode === "hybrid"}
+              onChange={() => handleModulationChange("hybrid")}
+              disabled={runMode !== "idle"}
+            />
+            Hybrid
+          </label>
+        </div>
       </div>
       <details className="debug-panel" hidden={!debugMode}>
         <summary>Debug</summary>
