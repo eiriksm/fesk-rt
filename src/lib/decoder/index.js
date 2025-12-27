@@ -26,8 +26,8 @@ export const HYBRID_FREQS_SETS = [
   ...BFSK_FREQS_SETS,                    // Banks C-D: BFSK
 ];
 
-// Default: 4FSK only (hybrid is too heavy for CI with 20 pipelines)
-const DEFAULT_FREQS_SETS = FREQS_SETS_4FSK;
+// Default: Hybrid mode (both 4FSK and BFSK)
+const DEFAULT_FREQS_SETS = HYBRID_FREQS_SETS;
 
 const DEFAULT_ENERGY = {
   floor: 5e-7,
