@@ -133,6 +133,24 @@ jobs:
             expectedText: abc9012
             recordDurationMs: 19000
             decodeTimeoutMs: 30000
+          - name: mic-sample8
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/samples/sample8.wav
+            expectedText: abc9012
+            recordDurationMs: 15000
+            decodeTimeoutMs: 30000
+          - name: mic-sample9
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/samples/sample9.wav
+            expectedText: abc9012
+            recordDurationMs: 100000
+            decodeTimeoutMs: 120000
+          - name: mic-sample10
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/samples/sample10.wav
+            expectedText: abc9012
+            recordDurationMs: 18000
+            decodeTimeoutMs: 30000
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

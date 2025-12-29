@@ -30,6 +30,9 @@ const SAMPLE_WAV_CONFIG = [
   { url: "sample5.wav" },
   { url: "sample6.wav" },
   { url: "sample7.wav" },
+  { url: "sample8.wav" },
+  { url: "sample9.wav" },
+  { url: "sample10.wav" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
