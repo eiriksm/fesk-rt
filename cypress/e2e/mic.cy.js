@@ -15,6 +15,6 @@ describe("FESK real time Test", () => {
     // At this point should auto-stop, since we passed the CRC.
     cy.get("#out .decoded-ok", { timeout: decodeTimeoutMs })
       .should("not.be.empty")
-      .should("contain.text", expectedText);
+      .should("contain.text", expectedText.trim());
   });
 });
