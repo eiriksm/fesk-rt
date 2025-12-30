@@ -139,9 +139,12 @@ jobs:
             expectedText: uptime 426 seconds
             recordDurationMs: 15000
             decodeTimeoutMs: 30000
-          # Note: mic-sample9 is skipped because the audio file is 94.69s long
-          # and Cypress fakeAudioCapture appears to have limitations with files
-          # longer than ~60s. The sample button test covers this file.
+          - name: mic-sample9
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/samples/sample9.wav
+            expectedText: rfie4rynbinauaaaaagusscekiaaaaacaaaaaaqcamaaaaap3ds3oaaaaaaxgushiia5tsjmp4aaaaajobefs4yaaafrgaaabmjqcae2tqmaaaaabrieyvcfuk737777777vww2skjjduqzpdaaaaaamjfcecvdytrrriyg4aaaab2qaynvjxuloaaaaaacjivhejlscmcba
+            recordDurationMs: 100000
+            decodeTimeoutMs: 30000
           - name: mic-sample10
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample10.wav
