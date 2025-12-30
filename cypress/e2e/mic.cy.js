@@ -13,15 +13,13 @@ describe("FESK real time Test", () => {
     cy.get("#startBtn", { timeout: 10000 }).click();
     cy.wait(recordDurationMs);
     // At this point should auto-stop, since we passed the CRC.
-    cy.get("#out .decoded-ok", { timeout: decodeTimeoutMs }).should(
-      ($el) => {
-        const text = $el.text().trim();
-        const expected = expectedText.trim();
-        expect(
-          text,
-          `Decoded text mismatch. Got: "${text}" (length: ${text.length})`,
-        ).to.include(expected);
-      },
-    );
+    cy.get("#out .decoded-ok", { timeout: decodeTimeoutMs }).should(($el) => {
+      const text = $el.text().trim();
+      const expected = expectedText.trim();
+      expect(
+        text,
+        `Decoded text mismatch. Got: "${text}" (length: ${text.length})`,
+      ).to.include(expected);
+    });
   });
 });
