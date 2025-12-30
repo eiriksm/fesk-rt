@@ -1031,8 +1031,10 @@ export function App() {
 
       // Log actual audio constraints applied and get sample rate
       const audioTrack = stream.getAudioTracks()[0];
+      let streamSampleRate;
       if (audioTrack) {
         const settings = audioTrack.getSettings();
+        streamSampleRate = settings.sampleRate;
         console.info("Audio track settings:", {
           echoCancellation: settings.echoCancellation,
           noiseSuppression: settings.noiseSuppression,
@@ -1042,10 +1044,14 @@ export function App() {
         });
       }
 
-      // Prepare decoder without specifying sample rate - let browser use hardware default
-      // This ensures AudioContext matches the MediaStream's native sample rate
-      console.info("Creating AudioContext with browser default sample rate");
-      await decoder.prepare();
+      // Prepare decoder with the stream's sample rate to ensure correct frequency decoding
+      // This matches the sample playback path behavior
+      console.info(
+        `Creating AudioContext with sample rate: ${streamSampleRate || "default"}`,
+      );
+      await decoder.prepare(
+        streamSampleRate ? { sampleRate: streamSampleRate } : undefined,
+      );
       await decoder.waitForReady();
       await decoder.attachStream(stream);
       pipelineDefs.forEach((def) => {
