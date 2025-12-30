@@ -145,7 +145,7 @@ jobs:
             expectedText: rfie4rynbinauaaaaagusscekiaaaaacaaaaaaqcamaaaaap3ds3oaaaaaaxgushiia5tsjmp4aaaaajobefs4yaaafrgaaabmjqcae2tqmaaaaabrieyvcfuk737777777vww2skjjduqzpdaaaaaamjfcecvdytrrriyg4aaaab2qaynvjxuloaaaaaacjivhejlscmcba
             recordDurationMs: 100000
             decodeTimeoutMs: 30000
-            modulation: bfsk
+            modulation: 4fsk
           - name: mic-sample10
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample10.wav
