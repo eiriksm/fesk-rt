@@ -161,7 +161,7 @@ jobs:
           node-version-file: '.nvmrc'
 
       - name: Cache depedencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache
@@ -191,7 +191,7 @@ jobs:
           CYPRESS_decodeTimeoutMs: ${{ matrix.decodeTimeoutMs || '' }}
           CYPRESS_modulation: ${{ matrix.modulation || '' }}
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: screenshots-${{ matrix.name }}
