@@ -85,4 +85,41 @@ describe("FESK real time with known samples", () => {
       .should("not.be.empty")
       .should("contain.text", "abc9012");
   });
+
+  it("should decode audio from sample 8", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 2000 }).click();
+    cy.get("#sample8Btn").click();
+    cy.get("#out .decoded-ok", { timeout: 30000 })
+      .should("not.be.empty")
+      .should("contain.text", "uptime 426 seconds");
+  });
+
+  it("should decode audio from sample 9", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 2000 }).click();
+    cy.get("#sample9Btn").click();
+    cy.get("#out .decoded-ok", { timeout: 120000 })
+      .should("not.be.empty")
+      .should(
+        "contain.text",
+        "rfie4rynbinauaaaaagusscekiaaaaacaaaaaaqcamaaaaap3ds3oaaaaaaxgushiia5tsjmp4aaaaajobefs4yaaafrgaaabmjqcae2tqmaaaaabrieyvcfuk737777777vww2skjjduqzpdaaaaaamjfcecvdytrrriyg4aaaab2qaynvjxuloaaaaaacjivhejlscmcba",
+      );
+  });
+
+  it("should decode audio from sample 10", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 2000 }).click();
+    cy.get("#sample10Btn").click();
+    cy.get("#out .decoded-ok", { timeout: 30000 })
+      .should("not.be.empty")
+      .should(
+        "contain.text",
+        `test
+test`,
+      );
+  });
 });
