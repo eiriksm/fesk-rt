@@ -143,8 +143,8 @@ jobs:
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample9.wav
             expectedText: rfie4rynbinauaaaaagusscekiaaaaacaaaaaaqcamaaaaap3ds3oaaaaaaxgushiia5tsjmp4aaaaajobefs4yaaafrgaaabmjqcae2tqmaaaaabrieyvcfuk737777777vww2skjjduqzpdaaaaaamjfcecvdytrrriyg4aaaab2qaynvjxuloaaaaaacjivhejlscmcba
-            recordDurationMs: 120000
-            decodeTimeoutMs: 120000
+            recordDurationMs: 105000
+            decodeTimeoutMs: 30000
           - name: mic-sample10
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample10.wav
