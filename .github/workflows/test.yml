@@ -121,7 +121,6 @@ jobs:
             fakeAudioCapture: public/samples/sample5.wav
             expectedText: test
             recordDurationMs: 17000
-            decodeTimeoutMs: 30000
           - name: mic-sample6
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample6.wav
@@ -132,13 +131,11 @@ jobs:
             fakeAudioCapture: public/samples/sample7.wav
             expectedText: abc9012
             recordDurationMs: 19000
-            decodeTimeoutMs: 30000
           - name: mic-sample8
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample8.wav
             expectedText: uptime 426 seconds
             recordDurationMs: 15000
-            decodeTimeoutMs: 30000
           # mic-sample9 is skipped due to Chrome's --use-file-for-fake-audio-capture
           # limitation with large files (sample9 is 17.3 MB / 94.69s, while other
           # working samples are ≤6.58 MB / ≤35.96s). The sample button test covers
@@ -150,7 +147,6 @@ jobs:
               test
               test
             recordDurationMs: 18000
-            decodeTimeoutMs: 30000
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
