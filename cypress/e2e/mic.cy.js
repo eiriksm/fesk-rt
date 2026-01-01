@@ -11,7 +11,9 @@ describe("FESK real time Test", () => {
 
     cy.get("#startBtn", { timeout: 10000 }).click();
     // At this point should auto-stop, since we passed the CRC.
-    cy.get(".result-row .out-row-text.decoded-ok", { timeout: recordDurationMs }).should(($el) => {
+    cy.get(".result-row .out-row-text.decoded-ok", {
+      timeout: recordDurationMs,
+    }).should(($el) => {
       const text = $el.text().trim();
       const expected = expectedText.trim();
       expect(
