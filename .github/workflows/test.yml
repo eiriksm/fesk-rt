@@ -97,32 +97,60 @@ jobs:
             spec: cypress/e2e/sample.cy.js
           - name: mic-sample1
             spec: cypress/e2e/mic.cy.js
-            fakeAudioCapture: public/sample.wav
+            fakeAudioCapture: public/samples/sample1.wav
             expectedText: test
-            recordDurationMs: 16000
+            recordDurationMs: 10000
           - name: mic-sample2
             spec: cypress/e2e/mic.cy.js
-            fakeAudioCapture: public/sample2.wav
-            # At the time of recording, this used to decode to "abc 123". Then, after I added it here
-            # I realized I forgot to include the "0" character, so I shifted the entire protocol by one.
-            # So yeah, now it reads "abc9012", but I won't re-record it now. It proves the point, yeah?
-            expectedText: "abc9012"
-            recordDurationMs: 27000
+            fakeAudioCapture: public/samples/sample2.wav
+            expectedText: kjeumrr2aaaaav2fijifmubyeaxaaaaa2aaqbhibfiaqaaiaajadqjnaaj2luapyaab3aah65ohf77ec4wc5ovs77vhd6jy7soh6wkaaaa
+            recordDurationMs: 35000
+            modulation: 4fsk
           - name: mic-sample3
             spec: cypress/e2e/mic.cy.js
-            fakeAudioCapture: public/sample32.wav
-            expectedText: "abc9012"
-            recordDurationMs: 17000
+            fakeAudioCapture: public/samples/sample3.wav
+            expectedText: uptime 408 seconds
+            recordDurationMs: 7000
           - name: mic-sample4
             spec: cypress/e2e/mic.cy.js
-            fakeAudioCapture: public/sample4.wav
-            expectedText: "abc9012"
-            recordDurationMs: 16000
+            fakeAudioCapture: public/samples/sample4.wav
+            expectedText: kjeumrr2aaaaav2fijifmubyeaxaaaaa2aaqbhibfiaqaaiaajadqjnaaj2luapyaab3aah65ohf77ec4wc5ovs77vhd6jy7soh6wkaaaa
+            recordDurationMs: 35000
           - name: mic-sample5
             spec: cypress/e2e/mic.cy.js
-            fakeAudioCapture: public/sample-clock-on-laptop.wav
-            expectedText: "abc9012"
+            fakeAudioCapture: public/samples/sample5.wav
+            expectedText: test
             recordDurationMs: 17000
+            decodeTimeoutMs: 30000
+          - name: mic-sample6
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/samples/sample6.wav
+            expectedText: abc9012
+            recordDurationMs: 9000
+          - name: mic-sample7
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/samples/sample7.wav
+            expectedText: abc9012
+            recordDurationMs: 19000
+            decodeTimeoutMs: 30000
+          - name: mic-sample8
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/samples/sample8.wav
+            expectedText: uptime 426 seconds
+            recordDurationMs: 15000
+            decodeTimeoutMs: 30000
+          # mic-sample9 is skipped due to Chrome's --use-file-for-fake-audio-capture
+          # limitation with large files (sample9 is 17.3 MB / 94.69s, while other
+          # working samples are ≤6.58 MB / ≤35.96s). The sample button test covers
+          # this file's decoding functionality.
+          - name: mic-sample10
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/samples/sample10.wav
+            expectedText: |
+              test
+              test
+            recordDurationMs: 18000
+            decodeTimeoutMs: 30000
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -161,6 +189,7 @@ jobs:
           CYPRESS_expectedText: ${{ matrix.expectedText || '' }}
           CYPRESS_recordDurationMs: ${{ matrix.recordDurationMs || '' }}
           CYPRESS_decodeTimeoutMs: ${{ matrix.decodeTimeoutMs || '' }}
+          CYPRESS_modulation: ${{ matrix.modulation || '' }}
 
       - uses: actions/upload-artifact@v6
         if: failure()

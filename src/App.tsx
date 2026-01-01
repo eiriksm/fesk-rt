@@ -10,6 +10,9 @@ import {
 import { DebugMetrics } from "./components/DebugMetrics";
 import {
   createFeskDecoder,
+  FREQS_SETS_4FSK,
+  BFSK_FREQS_SETS,
+  HYBRID_FREQS_SETS,
   type DecoderFrameEvent,
   type DecoderPreviewEvent,
   type DecoderStateEvent,
@@ -20,28 +23,16 @@ import {
 import "./App.css";
 
 const SAMPLE_WAV_CONFIG = [
-  { id: "sample1Btn", url: "sample.wav", label: "1" },
-  { id: "sample2Btn", url: "sample2.wav", label: "2" },
-  { id: "sample3Btn", url: "sample32.wav", label: "3" },
-  { id: "sample4Btn", url: "sample4.wav", label: "4" },
-  { id: "sample5Btn", url: "sample-clock-on-laptop.wav", label: "5" },
-  {
-    id: "sample6Btn",
-    url: "sample-clock-recorder-on-phone.wav",
-    label: "6",
-  },
-  { id: "sample7Btn", url: "sample-fast.wav", label: "7" },
-  {
-    id: "sample8Btn",
-    url: "sample-phone-recording-fast.wav",
-    label: "8",
-  },
-  { id: "sample9Btn", url: "sample-uptime-sim.wav", label: "9" },
-  { id: "sample10Btn", url: "sample-from-pr.wav", label: "10" },
-  { id: "sample11Btn", url: "sample-with-newline.wav", label: "11" },
-  { id: "sample12Btn", url: "sample-with-c32.wav", label: "12" },
-  { id: "sample13Btn", url: "sample-with-c32-long.wav", label: "13" },
-  { id: "sample14Btn", url: "sample-uptime-from-c32.wav", label: "14" },
+  { url: "sample1.wav" },
+  { url: "sample2.wav" },
+  { url: "sample3.wav" },
+  { url: "sample4.wav" },
+  { url: "sample5.wav" },
+  { url: "sample6.wav" },
+  { url: "sample7.wav" },
+  { url: "sample8.wav" },
+  { url: "sample9.wav" },
+  { url: "sample10.wav" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
@@ -374,8 +365,38 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 }
 
 export function App() {
-  const decoderRef = useRef<FeskDecoder>(createFeskDecoder());
-  const decoder = decoderRef.current;
+  // Read initial modulation from URL parameters, fallback to "hybrid"
+  const initialModulation = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlMode = params.get("modulation");
+    if (urlMode === "4fsk" || urlMode === "bfsk" || urlMode === "hybrid") {
+      return urlMode;
+    }
+    return "hybrid"; // Default mode
+  }, []);
+
+  // Modulation mode state
+  const [modulationMode, setModulationMode] = useState<
+    "4fsk" | "bfsk" | "hybrid"
+  >(initialModulation);
+
+  // Helper to get frequency sets for a modulation mode
+  const getFreqSetsForMode = useCallback((mode: "4fsk" | "bfsk" | "hybrid") => {
+    switch (mode) {
+      case "4fsk":
+        return FREQS_SETS_4FSK;
+      case "bfsk":
+        return BFSK_FREQS_SETS;
+      case "hybrid":
+        return HYBRID_FREQS_SETS;
+    }
+  }, []);
+
+  // Create decoder with appropriate frequency sets
+  const decoderRef = useRef<FeskDecoder>(
+    createFeskDecoder({ freqSets: getFreqSetsForMode(modulationMode) }),
+  );
+  const [decoder, setDecoder] = useState<FeskDecoder>(decoderRef.current);
   const pipelineDefs = useMemo<PipelineDefinition[]>(
     () => decoder.config.pipelineDefs,
     [decoder],
@@ -435,6 +456,51 @@ export function App() {
     setFrequencies(createInitialDisplayMap(pipelineDefs));
     setPipelineStatuses(createInitialDisplayMap(pipelineDefs));
   }, [pipelineDefs]);
+
+  // Handle modulation mode changes - recreate decoder
+  useEffect(() => {
+    const currentFreqSets = decoder.config.freqSets;
+    const newFreqSets = getFreqSetsForMode(modulationMode);
+
+    // Check if frequency sets actually changed
+    if (JSON.stringify(currentFreqSets) === JSON.stringify(newFreqSets)) {
+      return;
+    }
+
+    // Stop old decoder if running
+    if (runMode !== "idle") {
+      console.info("Stopping decoder to change modulation mode");
+      decoder.stop().catch(console.error);
+    }
+
+    // Create new decoder with new frequency sets
+    const newDecoder = createFeskDecoder({ freqSets: newFreqSets });
+    decoderRef.current = newDecoder;
+    setDecoder(newDecoder);
+
+    console.info(`Modulation mode changed to: ${modulationMode.toUpperCase()}`);
+  }, [modulationMode, getFreqSetsForMode, decoder, runMode]);
+
+  // Handler for changing modulation mode
+  const handleModulationChange = useCallback(
+    (mode: "4fsk" | "bfsk" | "hybrid") => {
+      if (runMode !== "idle") {
+        alert("Please stop the decoder before changing modulation mode");
+        return;
+      }
+      setModulationMode(mode);
+
+      // Update URL to reflect the new mode
+      const url = new URL(window.location.href);
+      url.searchParams.set("modulation", mode);
+      window.history.pushState({}, "", url.toString());
+
+      // Reset displays when mode changes
+      dispatchCandidates({ type: "reset" });
+      setFinalResult({ pipelineKey: null, text: "" });
+    },
+    [runMode],
+  );
 
   const startDisabled = isBusy || runMode !== "idle";
   const stopDisabled = isBusy || runMode === "idle";
@@ -1006,14 +1072,14 @@ export function App() {
   ]);
 
   const handlePlaySample = useCallback(
-    async (entry: (typeof SAMPLE_WAV_CONFIG)[number]) => {
+    async (entry: (typeof SAMPLE_WAV_CONFIG)[number], delta: number) => {
       if (isBusy || runMode !== "idle") return;
       setIsBusy(true);
       try {
         await cleanup(null, { resetFinalResult: true });
-        const labelSuffix = entry.label ? ` ${entry.label}` : "";
+        const labelSuffix = delta + 1;
         setStatus(`loading sample${labelSuffix}…`);
-        const response = await fetch(entry.url);
+        const response = await fetch(`samples/${entry.url}`);
         if (!response.ok) {
           throw new Error(`fetch failed (${response.status})`);
         }
@@ -1064,7 +1130,8 @@ export function App() {
           throw new Error("empty or unsupported WAV payload");
         }
         const playbackBuffer = toMonoBuffer(audioCtxInstance, audioBuffer);
-        await decoder.attachBuffer(playbackBuffer, { label: entry.label });
+        const label = `${labelSuffix}`;
+        await decoder.attachBuffer(playbackBuffer, { label });
         pipelineDefs.forEach((def) => {
           console.info(`[${def.label}] sample input connected`);
         });
@@ -1168,21 +1235,60 @@ export function App() {
         >
           {downloadLabel}
         </button>
+        <div className="modulation-selector">
+          <span className="modulation-label">Mode:</span>
+          <label className={modulationMode === "4fsk" ? "active" : ""}>
+            <input
+              type="radio"
+              name="modulation"
+              value="4fsk"
+              checked={modulationMode === "4fsk"}
+              onChange={() => handleModulationChange("4fsk")}
+              disabled={runMode !== "idle"}
+            />
+            4FSK
+          </label>
+          <label className={modulationMode === "bfsk" ? "active" : ""}>
+            <input
+              type="radio"
+              name="modulation"
+              value="bfsk"
+              checked={modulationMode === "bfsk"}
+              onChange={() => handleModulationChange("bfsk")}
+              disabled={runMode !== "idle"}
+            />
+            BFSK
+          </label>
+          <label className={modulationMode === "hybrid" ? "active" : ""}>
+            <input
+              type="radio"
+              name="modulation"
+              value="hybrid"
+              checked={modulationMode === "hybrid"}
+              onChange={() => handleModulationChange("hybrid")}
+              disabled={runMode !== "idle"}
+            />
+            Hybrid
+          </label>
+        </div>
       </div>
       <details className="debug-panel" hidden={!debugMode}>
         <summary>Debug</summary>
         <div className="debug-panel-content">
           <div className="debug-controls">
-            {SAMPLE_WAV_CONFIG.map((entry) => (
-              <button
-                id={entry.id}
-                key={entry.url}
-                onClick={() => handlePlaySample(entry)}
-                disabled={sampleButtonsDisabled}
-              >
-                Play Sample {entry.label} 🔊
-              </button>
-            ))}
+            {SAMPLE_WAV_CONFIG.map((entry, delta: number) => {
+              const id = delta + 1;
+              return (
+                <button
+                  id={`sample${id}Btn`}
+                  key={entry.url}
+                  onClick={() => handlePlaySample(entry, delta)}
+                  disabled={sampleButtonsDisabled}
+                >
+                  Play Sample {id} 🔊
+                </button>
+              );
+            })}
           </div>
           <div className="debug-metrics">
             <div className="debug-metric">
