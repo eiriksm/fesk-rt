@@ -1,12 +1,14 @@
 /// <reference types="cypress" />
 
+const decodedSelector = ".result-row .out-row-text.decoded-ok";
+
 describe("FESK real time with known samples", () => {
   it("should decode audio from sample 1", () => {
     cy.visit("/?debug=1");
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample1Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 30000 })
+    cy.get(decodedSelector, { timeout: 30000 })
       .should("not.be.empty")
       .should("contain.text", "test");
   });
@@ -16,7 +18,7 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 10000 }).click();
     cy.get("#sample2Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 40000 })
+    cy.get(decodedSelector, { timeout: 40000 })
       .should("not.be.empty")
       .should(
         "contain.text",
@@ -33,7 +35,7 @@ describe("FESK real time with known samples", () => {
     cy.visit("/?debug=1");
     cy.get(".debug-panel summary", { timeout: 2000 }).click();
     cy.get("#sample3Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 8000 })
+    cy.get(decodedSelector, { timeout: 8000 })
       .should("not.be.empty")
       .should("contain.text", "uptime 408 seconds");
   });
@@ -43,7 +45,7 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 2000 }).click();
     cy.get("#sample4Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 35000 })
+    cy.get(decodedSelector, { timeout: 35000 })
       .should("not.be.empty")
       .should(
         "contain.text",
@@ -61,7 +63,7 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 2000 }).click();
     cy.get("#sample5Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 30000 })
+    cy.get(decodedSelector, { timeout: 30000 })
       .should("not.be.empty")
       .should("contain.text", "test");
   });
@@ -71,7 +73,7 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 2000 }).click();
     cy.get("#sample6Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 30000 })
+    cy.get(decodedSelector, { timeout: 30000 })
       .should("not.be.empty")
       .should("contain.text", "abc9012");
   });
@@ -81,7 +83,7 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 2000 }).click();
     cy.get("#sample7Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 30000 })
+    cy.get(decodedSelector, { timeout: 30000 })
       .should("not.be.empty")
       .should("contain.text", "abc9012");
   });
@@ -91,7 +93,7 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 2000 }).click();
     cy.get("#sample8Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 30000 })
+    cy.get(decodedSelector, { timeout: 30000 })
       .should("not.be.empty")
       .should("contain.text", "uptime 426 seconds");
   });
@@ -101,7 +103,7 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 2000 }).click();
     cy.get("#sample9Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 120000 })
+    cy.get(decodedSelector, { timeout: 120000 })
       .should("not.be.empty")
       .should(
         "contain.text",
@@ -114,12 +116,32 @@ describe("FESK real time with known samples", () => {
 
     cy.get(".debug-panel summary", { timeout: 2000 }).click();
     cy.get("#sample10Btn").click();
-    cy.get("#out .decoded-ok", { timeout: 30000 })
+    cy.get(decodedSelector, { timeout: 30000 })
       .should("not.be.empty")
       .should(
         "contain.text",
         `test
 test`,
       );
+  });
+
+  it("should decode audio from sample 11", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 2000 }).click();
+    cy.get("#sample11Btn").click();
+    cy.get(decodedSelector, { timeout: 30000 })
+      .should("not.be.empty")
+      .should("contain.text", "test");
+  });
+
+  it("should decode audio from sample 12", () => {
+    cy.visit("/?debug=1");
+
+    cy.get(".debug-panel summary", { timeout: 2000 }).click();
+    cy.get("#sample12Btn").click();
+    cy.get(decodedSelector, { timeout: 30000 })
+      .should("not.be.empty")
+      .should("contain.text", "test");
   });
 });
