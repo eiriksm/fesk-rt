@@ -5,7 +5,28 @@ FESK decoding, real time ⚡
 
 ## Usage
 
-This decoder is meant to decode messages created with the FESK tx library that ships with the [Second Movement firmware for Sensor Watch](https://github.com/joeycastillo/Second-Movement). After following its setup guide to install the Arm toolchain, enable the FESK tx demo face in your watch build and flash the resulting UF2 to your Sensor Watch as described in the [official hardware documentation](https://www.sensorwatch.net/docs/firmware/flashing/). Once the face is running you can press the alarm button on the watch to broadcast a test FESK frame, and this can be decoded in the web app. Or use the library in your own watch face and broadcast whatever you want.
+This decoder is meant to decode messages created with the FESK TX library that ships with the [Second Movement firmware for Sensor Watch](https://github.com/joeycastillo/Second-Movement).
+
+If you want to test the out of the box demo mode, enable the watch face `fesk_demo_lite_face` in your watch build and flash the resulting UF2 to your Sensor Watch as described in the [official hardware documentation](https://www.sensorwatch.net/docs/firmware/flashing/). Once the face is running you can press the alarm button on the watch to broadcast a test FESK frame, and this can be decoded in the web app.
+
+Or you would use the library in your own watch face and broadcast whatever you want. Something like:
+
+```c
+typedef struct {
+   fesk_session_t session;
+} fesk_demo_lite_state_t;
+```
+
+```c
+       case EVENT_ALARM_BUTTON_UP:
+           {
+               fesk_session_config_t config = fesk_session_config_defaults();
+               config.static_message = "test";
+               fesk_session_init(&state->session, &config);
+               fesk_session_start(&state->session);
+           }
+           break;
+```
 
 At the time of writing the FESK tx library is not merged, but can be found here: https://github.com/joeycastillo/second-movement/pull/139
 
