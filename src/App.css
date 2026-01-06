@@ -27,6 +27,17 @@ h1 {
   font-size: clamp(1.5rem, 2.5vw, 2rem);
 }
 
+.privacy-notice {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 0;
+  font-size: 0.95rem;
+  color: #2e7d32;
+  text-align: center;
+}
+
 button {
   padding: 0.6rem 1.1rem;
   border: 1px solid #ccc;

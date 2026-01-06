@@ -1222,6 +1222,10 @@ export function App() {
   return (
     <div className="app">
       <h1>FESK Real-Time Decoder</h1>
+      <div className="privacy-notice">
+        This app runs entirely in your browser. It does not upload your audio or
+        the decoded data anywhere.
+      </div>
       <div className="row controls">
         <button id="startBtn" onClick={handleStart} disabled={startDisabled}>
           Start 🎙️
