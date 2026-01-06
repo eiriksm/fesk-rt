@@ -28,7 +28,7 @@ typedef struct {
            break;
 ```
 
-At the time of writing the FESK tx library is not merged, but can be found here: https://github.com/joeycastillo/second-movement/pull/139
+At the time of writing the FESK TX library is not merged, but can be found here: https://github.com/joeycastillo/second-movement/pull/139
 
 ## Supported character codes
 
