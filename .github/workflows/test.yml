@@ -181,7 +181,7 @@ jobs:
         run: npm run build
 
       - name: Run cypress tests (${{ matrix.name }})
-        uses: cypress-io/github-action@v6
+        uses: cypress-io/github-action@v7
         with:
           start: python -m http.server 3000 -d ./dist
           # We just installed in the last step.
