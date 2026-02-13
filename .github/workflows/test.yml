@@ -104,7 +104,7 @@ jobs:
             spec: cypress/e2e/mic.cy.js
             fakeAudioCapture: public/samples/sample2.wav
             expectedText: kjeumrr2aaaaav2fijifmubyeaxaaaaa2aaqbhibfiaqaaiaajadqjnaaj2luapyaab3aah65ohf77ec4wc5ovs77vhd6jy7soh6wkaaaa
-            recordDurationMs: 35000
+            recordDurationMs: 37000
             modulation: 4fsk
           - name: mic-sample3
             spec: cypress/e2e/mic.cy.js
