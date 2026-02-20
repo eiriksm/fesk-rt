@@ -1342,7 +1342,7 @@ export function App() {
             <span className="out-row-text decoded-ok">{finalResult.text}</span>
           </div>
         </div>
-        {(previewBase32Decoded || finalBase32Decoded) && (
+        {(previewBase32Decoded !== null || finalBase32Decoded !== null) && (
           <div className="out-row base32-text-row">
             <div className="out-row-header">Base32 decoded</div>
             <div className="out-row-content">
