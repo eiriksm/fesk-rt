@@ -912,7 +912,6 @@ export function App() {
     [finalResult.text],
   );
 
-
   const handlePreviewEvent = useCallback((payload: DecoderPreviewEvent) => {
     if (!payload?.pipelineKey) return;
     const pipelineKey: string = payload.pipelineKey;
@@ -1014,13 +1013,7 @@ export function App() {
         console.warn(`[${label}] frame decode fail`);
       }
     },
-    [
-      dispatchCandidates,
-      isBusy,
-      pipelineByKey,
-      runMode,
-      triggerAutoStop,
-    ],
+    [dispatchCandidates, isBusy, pipelineByKey, runMode, triggerAutoStop],
   );
 
   const handleStart = useCallback(async () => {
