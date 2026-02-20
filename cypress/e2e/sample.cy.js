@@ -156,5 +156,5 @@ test`,
       cy.get(".base32-text-row .decoded-ok")
         .should("be.visible")
         .and("have.text", "✌️💪️");
-   }
+   });
 });
