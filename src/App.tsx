@@ -254,6 +254,90 @@ function formatFrequency(freq: number): string {
   return (text.endsWith(".0") ? text.slice(0, -2) : text) + " Hz";
 }
 
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function decodeBase32ToBytes(text: string): Uint8Array | null {
+  const normalized = text.toUpperCase().replace(/[=\s]/g, "");
+  if (normalized.length === 0) return null;
+
+  for (let i = 0; i < normalized.length; i++) {
+    if (!BASE32_ALPHABET.includes(normalized[i])) {
+      return null;
+    }
+  }
+
+  const bytes: number[] = [];
+  let bits = 0;
+  let value = 0;
+
+  for (let i = 0; i < normalized.length; i++) {
+    const index = BASE32_ALPHABET.indexOf(normalized[i]);
+    value = (value << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+
+  if (bytes.length === 0) return null;
+  return new Uint8Array(bytes);
+}
+
+function tryDecodeBase32Text(text: string): string | null {
+  try {
+    const bytes = decodeBase32ToBytes(text);
+    if (!bytes) return null;
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function tryDecodeAsBase32Image(
+  text: string,
+): { url: string; format: string } | null {
+  try {
+    const bytes = decodeBase32ToBytes(text);
+    if (!bytes) return null;
+
+    // Check for PNG signature (89 50 4E 47 0D 0A 1A 0A)
+    const hasPNGSignature =
+      bytes.length >= 8 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47 &&
+      bytes[4] === 0x0d &&
+      bytes[5] === 0x0a &&
+      bytes[6] === 0x1a &&
+      bytes[7] === 0x0a;
+
+    // Check for WebP signature (RIFF....WEBP)
+    const hasWebPSignature =
+      bytes.length >= 12 &&
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 && // "RIFF"
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50; // "WEBP"
+
+    if (!hasPNGSignature && !hasWebPSignature) return null;
+
+    const format = hasPNGSignature ? "PNG" : "WebP";
+    const mimeType = hasPNGSignature ? "image/png" : "image/webp";
+    const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    return { url, format };
+  } catch (err) {
+    console.debug("Base32 decode failed:", err);
+    return null;
+  }
+}
+
 function decodeAudioDataBuffer(
   audioCtx: AudioContext,
   arrayBuffer: ArrayBuffer,
@@ -818,128 +902,16 @@ export function App() {
     [handleSamplePlaybackEnded],
   );
 
-  const tryDecodeBase32Text = useCallback((text: string): string | null => {
-    try {
-      const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-      const normalized = text.toUpperCase().replace(/[=\s]/g, "");
-      if (normalized.length === 0) return null;
-
-      for (let i = 0; i < normalized.length; i++) {
-        if (!base32Alphabet.includes(normalized[i])) {
-          return null;
-        }
-      }
-
-      const bytes: number[] = [];
-      let bits = 0;
-      let value = 0;
-
-      for (let i = 0; i < normalized.length; i++) {
-        const index = base32Alphabet.indexOf(normalized[i]);
-        if (index === -1) return null;
-        value = (value << 5) | index;
-        bits += 5;
-        if (bits >= 8) {
-          bytes.push((value >>> (bits - 8)) & 0xff);
-          bits -= 8;
-        }
-      }
-
-      if (bytes.length === 0) return null;
-
-      const decoded = new TextDecoder("utf-8", { fatal: false }).decode(
-        new Uint8Array(bytes),
-      );
-      return decoded;
-    } catch {
-      return null;
-    }
-  }, []);
-
   const previewBase32Decoded = useMemo(
     () => (previewText ? tryDecodeBase32Text(previewText) : null),
-    [previewText, tryDecodeBase32Text],
+    [previewText],
   );
 
   const finalBase32Decoded = useMemo(
     () => (finalResult.text ? tryDecodeBase32Text(finalResult.text) : null),
-    [finalResult.text, tryDecodeBase32Text],
+    [finalResult.text],
   );
 
-  const tryDecodeAsBase32Image = useCallback(
-    (text: string): { url: string; format: string } | null => {
-      try {
-        // RFC 4648 base32 alphabet
-        const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-        const normalized = text.toUpperCase().replace(/[=\s]/g, "");
-
-        // Validate base32 characters
-        for (let i = 0; i < normalized.length; i++) {
-          if (!base32Alphabet.includes(normalized[i])) {
-            return null;
-          }
-        }
-
-        // Decode base32
-        const bytes: number[] = [];
-        let bits = 0;
-        let value = 0;
-
-        for (let i = 0; i < normalized.length; i++) {
-          const char = normalized[i];
-          const index = base32Alphabet.indexOf(char);
-          if (index === -1) return null;
-
-          value = (value << 5) | index;
-          bits += 5;
-
-          if (bits >= 8) {
-            bytes.push((value >>> (bits - 8)) & 0xff);
-            bits -= 8;
-          }
-        }
-
-        if (bytes.length === 0) return null;
-
-        // Check for PNG signature (89 50 4E 47 0D 0A 1A 0A)
-        const hasPNGSignature =
-          bytes.length >= 8 &&
-          bytes[0] === 0x89 &&
-          bytes[1] === 0x50 &&
-          bytes[2] === 0x4e &&
-          bytes[3] === 0x47 &&
-          bytes[4] === 0x0d &&
-          bytes[5] === 0x0a &&
-          bytes[6] === 0x1a &&
-          bytes[7] === 0x0a;
-
-        // Check for WebP signature (RIFF....WEBP)
-        const hasWebPSignature =
-          bytes.length >= 12 &&
-          bytes[0] === 0x52 &&
-          bytes[1] === 0x49 &&
-          bytes[2] === 0x46 &&
-          bytes[3] === 0x46 && // "RIFF"
-          bytes[8] === 0x57 &&
-          bytes[9] === 0x45 &&
-          bytes[10] === 0x42 &&
-          bytes[11] === 0x50; // "WEBP"
-
-        if (!hasPNGSignature && !hasWebPSignature) return null;
-
-        // Create blob and data URL with appropriate MIME type
-        const format = hasPNGSignature ? "PNG" : "WebP";
-        const mimeType = hasPNGSignature ? "image/png" : "image/webp";
-        const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        return { url, format };
-      } catch (err) {
-        console.debug("Base32 decode failed:", err);
-        return null;
-      }
-    },
-    [],
-  );
 
   const handlePreviewEvent = useCallback((payload: DecoderPreviewEvent) => {
     if (!payload?.pipelineKey) return;
@@ -1048,7 +1020,6 @@ export function App() {
       pipelineByKey,
       runMode,
       triggerAutoStop,
-      tryDecodeAsBase32Image,
     ],
   );
 
