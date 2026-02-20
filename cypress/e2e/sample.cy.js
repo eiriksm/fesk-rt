@@ -146,15 +146,15 @@ test`,
   });
 
   it("should decode audio from sample 13", () => {
-      cy.visit("/?debug=1");
-      cy.get(".debug-panel summary", { timeout: 2000 }).click();
-      cy.get("#sample13Btn").click();
-      cy.get(decodedSelector, { timeout: 15000 })
-        .should("not.be.empty")
-        .should("contain.text", "4koiz35yr7yj7evk564i6");
-      // But it should in fact also be base32 decoded.
-      cy.get(".base32-text-row .decoded-ok")
-        .should("be.visible")
-        .and("have.text", "✌️💪️");
-   });
+    cy.visit("/?debug=1");
+    cy.get(".debug-panel summary", { timeout: 2000 }).click();
+    cy.get("#sample13Btn").click();
+    cy.get(decodedSelector, { timeout: 15000 })
+      .should("not.be.empty")
+      .should("contain.text", "4koiz35yr7yj7evk564i6");
+    // But it should in fact also be base32 decoded.
+    cy.get(".base32-text-row .decoded-ok")
+      .should("be.visible")
+      .and("have.text", "✌️💪️");
+  });
 });
