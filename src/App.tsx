@@ -35,6 +35,7 @@ const SAMPLE_WAV_CONFIG = [
   { url: "sample10.wav" },
   { url: "sample11.wav" },
   { url: "sample12.wav" },
+  { url: "sample13.wav" },
 ] as const;
 
 const DOWNLOAD_LABEL = "Download WAV ⬇️";
@@ -817,6 +818,54 @@ export function App() {
     [handleSamplePlaybackEnded],
   );
 
+  const tryDecodeBase32Text = useCallback((text: string): string | null => {
+    try {
+      const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+      const normalized = text.toUpperCase().replace(/[=\s]/g, "");
+      if (normalized.length === 0) return null;
+
+      for (let i = 0; i < normalized.length; i++) {
+        if (!base32Alphabet.includes(normalized[i])) {
+          return null;
+        }
+      }
+
+      const bytes: number[] = [];
+      let bits = 0;
+      let value = 0;
+
+      for (let i = 0; i < normalized.length; i++) {
+        const index = base32Alphabet.indexOf(normalized[i]);
+        if (index === -1) return null;
+        value = (value << 5) | index;
+        bits += 5;
+        if (bits >= 8) {
+          bytes.push((value >>> (bits - 8)) & 0xff);
+          bits -= 8;
+        }
+      }
+
+      if (bytes.length === 0) return null;
+
+      const decoded = new TextDecoder("utf-8", { fatal: false }).decode(
+        new Uint8Array(bytes),
+      );
+      return decoded;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const previewBase32Decoded = useMemo(
+    () => (previewText ? tryDecodeBase32Text(previewText) : null),
+    [previewText, tryDecodeBase32Text],
+  );
+
+  const finalBase32Decoded = useMemo(
+    () => (finalResult.text ? tryDecodeBase32Text(finalResult.text) : null),
+    [finalResult.text, tryDecodeBase32Text],
+  );
+
   const tryDecodeAsBase32Image = useCallback(
     (text: string): { url: string; format: string } | null => {
       try {
@@ -1329,9 +1378,21 @@ export function App() {
             <span className="out-row-text decoded-ok">{finalResult.text}</span>
           </div>
         </div>
+        {(previewBase32Decoded || finalBase32Decoded) && (
+          <div className="out-row base32-text-row">
+            <div className="out-row-header">Base32 decoded</div>
+            <div className="out-row-content">
+              <span
+                className={`out-row-text ${finalBase32Decoded ? "decoded-ok" : "provisional"}`}
+              >
+                {finalBase32Decoded ?? previewBase32Decoded}
+              </span>
+            </div>
+          </div>
+        )}
         {decodedImageUrl && (
           <div className="out-row decoded-image-row">
-            <div className="out-row-header">Base32 decoded result</div>
+            <div className="out-row-header">Base32 image</div>
             <div className="out-row-content">
               {imageFormat && (
                 <div className="image-format">
