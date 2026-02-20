@@ -157,6 +157,11 @@ jobs:
             fakeAudioCapture: public/samples/sample12.wav
             expectedText: test
             recordDurationMs: 12000
+          - name: mic-sample13
+            spec: cypress/e2e/mic.cy.js
+            fakeAudioCapture: public/samples/sample13.wav
+            expectedText: 4koiz35yr7yj7evk564i6
+            recordDurationMs: 12000
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
