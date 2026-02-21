@@ -29,6 +29,7 @@ describe("FESK real time with known samples", () => {
     cy.get(".decoded-image-row .image-format")
       .should("be.visible")
       .and("have.text", "WebP");
+    cy.get(".base32-text-row .decoded-ok").should("not.exist");
   });
 
   it("should decode audio from sample 3", () => {
@@ -56,6 +57,7 @@ describe("FESK real time with known samples", () => {
     cy.get(".decoded-image-row .image-format")
       .should("be.visible")
       .and("have.text", "WebP");
+    cy.get(".base32-text-row .decoded-ok").should("not.exist");
   });
 
   it("should decode audio from sample 5 (BFSK)", () => {
@@ -109,6 +111,8 @@ describe("FESK real time with known samples", () => {
         "contain.text",
         "rfie4rynbinauaaaaagusscekiaaaaacaaaaaaqcamaaaaap3ds3oaaaaaaxgushiia5tsjmp4aaaaajobefs4yaaafrgaaabmjqcae2tqmaaaaabrieyvcfuk737777777vww2skjjduqzpdaaaaaamjfcecvdytrrriyg4aaaab2qaynvjxuloaaaaaacjivhejlscmcba",
       );
+
+    cy.get(".base32-text-row .decoded-ok").should("not.exist");
   });
 
   it("should decode audio from sample 10", () => {

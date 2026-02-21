@@ -19,6 +19,7 @@ import {
   type FeskDecoder,
   type PipelineDefinition,
 } from "./lib/decoder";
+import { tryDecodeAsBase32Image, tryDecodeBase32Text } from "./lib/base32";
 
 import "./App.css";
 
@@ -252,90 +253,6 @@ function createInitialDisplayMap(
 function formatFrequency(freq: number): string {
   const text = freq.toFixed(1);
   return (text.endsWith(".0") ? text.slice(0, -2) : text) + " Hz";
-}
-
-const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-
-function decodeBase32ToBytes(text: string): Uint8Array | null {
-  const normalized = text.toUpperCase().replace(/[=\s]/g, "");
-  if (normalized.length === 0) return null;
-
-  for (let i = 0; i < normalized.length; i++) {
-    if (!BASE32_ALPHABET.includes(normalized[i])) {
-      return null;
-    }
-  }
-
-  const bytes: number[] = [];
-  let bits = 0;
-  let value = 0;
-
-  for (let i = 0; i < normalized.length; i++) {
-    const index = BASE32_ALPHABET.indexOf(normalized[i]);
-    value = (value << 5) | index;
-    bits += 5;
-    if (bits >= 8) {
-      bytes.push((value >>> (bits - 8)) & 0xff);
-      bits -= 8;
-    }
-  }
-
-  if (bytes.length === 0) return null;
-  return new Uint8Array(bytes);
-}
-
-function tryDecodeBase32Text(text: string): string | null {
-  try {
-    const bytes = decodeBase32ToBytes(text);
-    if (!bytes) return null;
-    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  } catch {
-    return null;
-  }
-}
-
-function tryDecodeAsBase32Image(
-  text: string,
-): { url: string; format: string } | null {
-  try {
-    const bytes = decodeBase32ToBytes(text);
-    if (!bytes) return null;
-
-    // Check for PNG signature (89 50 4E 47 0D 0A 1A 0A)
-    const hasPNGSignature =
-      bytes.length >= 8 &&
-      bytes[0] === 0x89 &&
-      bytes[1] === 0x50 &&
-      bytes[2] === 0x4e &&
-      bytes[3] === 0x47 &&
-      bytes[4] === 0x0d &&
-      bytes[5] === 0x0a &&
-      bytes[6] === 0x1a &&
-      bytes[7] === 0x0a;
-
-    // Check for WebP signature (RIFF....WEBP)
-    const hasWebPSignature =
-      bytes.length >= 12 &&
-      bytes[0] === 0x52 &&
-      bytes[1] === 0x49 &&
-      bytes[2] === 0x46 &&
-      bytes[3] === 0x46 && // "RIFF"
-      bytes[8] === 0x57 &&
-      bytes[9] === 0x45 &&
-      bytes[10] === 0x42 &&
-      bytes[11] === 0x50; // "WEBP"
-
-    if (!hasPNGSignature && !hasWebPSignature) return null;
-
-    const format = hasPNGSignature ? "PNG" : "WebP";
-    const mimeType = hasPNGSignature ? "image/png" : "image/webp";
-    const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    return { url, format };
-  } catch (err) {
-    console.debug("Base32 decode failed:", err);
-    return null;
-  }
 }
 
 function decodeAudioDataBuffer(
@@ -966,10 +883,14 @@ export function App() {
           console.info(
             `[${label}] Base32 decoded as ${imageResult.format} image`,
           );
+          const blob = new Blob([imageResult.data], {
+            type: imageResult.mimeType,
+          });
+          const url = URL.createObjectURL(blob);
           // Revoke old URL to prevent memory leak
           setDecodedImageUrl((prevUrl) => {
             if (prevUrl) URL.revokeObjectURL(prevUrl);
-            return imageResult.url;
+            return url;
           });
           setImageFormat(imageResult.format);
         } else {
