@@ -32,7 +32,7 @@ describe("base32 helpers", () => {
 
   it("detects PNG image payloads", () => {
     // Base32-encoded PNG signature bytes: 89 50 4E 47 0D 0A 1A 0A
-    const pngPayload = "RFIE4RYNBINBI===";
+    const pngPayload = "RFIE4RYNBINAU===";
 
     expect(tryDecodeBase32Text(pngPayload)).toBeNull();
 

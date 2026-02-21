@@ -1,4 +1,9 @@
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const BASE32_LOOKUP = new Int16Array(91).fill(-1);
+
+for (let i = 0; i < BASE32_ALPHABET.length; i++) {
+  BASE32_LOOKUP[BASE32_ALPHABET.charCodeAt(i)] = i;
+}
 
 export function decodeBase32ToBytes(text: string): Uint8Array | null {
   const normalized = text.toUpperCase().replace(/[=\s]/g, "");
@@ -9,7 +14,12 @@ export function decodeBase32ToBytes(text: string): Uint8Array | null {
   let value = 0;
 
   for (let i = 0; i < normalized.length; i++) {
-    const index = BASE32_ALPHABET.indexOf(normalized[i]);
+    const charCode = normalized.charCodeAt(i);
+    if (charCode >= BASE32_LOOKUP.length) {
+      return null;
+    }
+
+    const index = BASE32_LOOKUP[charCode];
     if (index === -1) {
       return null;
     }
@@ -25,7 +35,9 @@ export function decodeBase32ToBytes(text: string): Uint8Array | null {
   return new Uint8Array(bytes);
 }
 
-export function hasKnownImageSignature(bytes: Uint8Array): boolean {
+export function hasKnownImageSignature(
+  bytes: Uint8Array,
+): "PNG" | "WebP" | null {
   const hasPNGSignature =
     bytes.length >= 8 &&
     bytes[0] === 0x89 &&
@@ -48,7 +60,9 @@ export function hasKnownImageSignature(bytes: Uint8Array): boolean {
     bytes[10] === 0x42 &&
     bytes[11] === 0x50;
 
-  return hasPNGSignature || hasWebPSignature;
+  if (hasPNGSignature) return "PNG";
+  if (hasWebPSignature) return "WebP";
+  return null;
 }
 
 function isPrintableCodePoint(codePoint: number): boolean {
