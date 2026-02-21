@@ -4,18 +4,15 @@ export function decodeBase32ToBytes(text: string): Uint8Array | null {
   const normalized = text.toUpperCase().replace(/[=\s]/g, "");
   if (normalized.length === 0) return null;
 
-  for (let i = 0; i < normalized.length; i++) {
-    if (!BASE32_ALPHABET.includes(normalized[i])) {
-      return null;
-    }
-  }
-
   const bytes: number[] = [];
   let bits = 0;
   let value = 0;
 
   for (let i = 0; i < normalized.length; i++) {
     const index = BASE32_ALPHABET.indexOf(normalized[i]);
+    if (index === -1) {
+      return null;
+    }
     value = (value << 5) | index;
     bits += 5;
     if (bits >= 8) {
