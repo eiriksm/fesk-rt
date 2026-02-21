@@ -29,6 +29,7 @@ describe("FESK real time with known samples", () => {
     cy.get(".decoded-image-row .image-format")
       .should("be.visible")
       .and("have.text", "WebP");
+    cy.get(".base32-text-row .decoded-ok").should("not.exist");
   });
 
   it("should decode audio from sample 3", () => {
@@ -56,6 +57,7 @@ describe("FESK real time with known samples", () => {
     cy.get(".decoded-image-row .image-format")
       .should("be.visible")
       .and("have.text", "WebP");
+    cy.get(".base32-text-row .decoded-ok").should("not.exist");
   });
 
   it("should decode audio from sample 5 (BFSK)", () => {
@@ -109,6 +111,8 @@ describe("FESK real time with known samples", () => {
         "contain.text",
         "rfie4rynbinauaaaaagusscekiaaaaacaaaaaaqcamaaaaap3ds3oaaaaaaxgushiia5tsjmp4aaaaajobefs4yaaafrgaaabmjqcae2tqmaaaaabrieyvcfuk737777777vww2skjjduqzpdaaaaaamjfcecvdytrrriyg4aaaab2qaynvjxuloaaaaaacjivhejlscmcba",
       );
+
+    cy.get(".base32-text-row .decoded-ok").should("not.exist");
   });
 
   it("should decode audio from sample 10", () => {
@@ -143,5 +147,18 @@ test`,
     cy.get(decodedSelector, { timeout: 30000 })
       .should("not.be.empty")
       .should("contain.text", "test");
+  });
+
+  it("should decode audio from sample 13", () => {
+    cy.visit("/?debug=1");
+    cy.get(".debug-panel summary", { timeout: 2000 }).click();
+    cy.get("#sample13Btn").click();
+    cy.get(decodedSelector, { timeout: 15000 })
+      .should("not.be.empty")
+      .should("contain.text", "4koiz35yr7yj7evk564i6");
+    // But it should in fact also be base32 decoded.
+    cy.get(".base32-text-row .decoded-ok")
+      .should("be.visible")
+      .and("have.text", "✌️💪️");
   });
 });
