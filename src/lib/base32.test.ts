@@ -30,6 +30,15 @@ describe("base32 helpers", () => {
     expect(imageResult?.format).toBe("WebP");
   });
 
+  it("detects PNG image payloads", () => {
+    // Base32-encoded PNG signature bytes: 89 50 4E 47 0D 0A 1A 0A
+    const pngPayload = "RFIE4RYNBINBI===";
+
+    expect(tryDecodeBase32Text(pngPayload)).toBeNull();
+
+    const pngResult = tryDecodeAsBase32Image(pngPayload);
+    expect(pngResult?.format).toBe("PNG");
+  });
   it("rejects invalid utf-8 payloads", () => {
     expect(tryDecodeBase32Text("74======")).toBeNull();
   });
