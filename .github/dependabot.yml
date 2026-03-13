@@ -11,6 +11,10 @@ updates:
     schedule:
       interval: "daily"
     groups:
+      vite-relate:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
       react-related:
         patterns:
           - "react"
