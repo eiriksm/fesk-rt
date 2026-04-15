@@ -2,6 +2,10 @@
   "name": "fesk-rt",
   "version": "0.0.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eiriksm/fesk-rt"
+  },
   "exports": {
     ".": {
       "import": "./dist-lib/fesk-rt.js",
