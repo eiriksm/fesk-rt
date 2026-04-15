@@ -1,12 +1,21 @@
 {
   "name": "fesk-rt",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist-lib/fesk-rt.js",
+      "types": "./dist-lib/index.d.ts"
+    }
+  },
+  "files": [
+    "dist-lib/"
+  ],
   "scripts": {
     "type-check": "tsc --noEmit",
     "dev": "vite",
     "build": "vite build",
+    "build:lib": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json && mkdir -p dist-lib/decoder && cp src/lib/decoder/index.d.ts dist-lib/decoder/index.d.ts",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
     "start": "vite preview --host 0.0.0.0 --port 4173",
