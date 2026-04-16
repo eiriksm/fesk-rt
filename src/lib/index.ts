@@ -1,5 +1,6 @@
 import { createFeskDecoder as _createFeskDecoder } from "./decoder/index.js";
 import type { FeskDecoder } from "./decoder/index.js";
+import workletSource from "../../public/mb-fesk-worklet.js?raw";
 
 export {
   DEFAULT_FESK_DECODER_CONFIG,
@@ -32,10 +33,14 @@ export {
   tryDecodeAsBase32Image,
 } from "./base32.js";
 
+function createWorkletUrl(): URL {
+  const blob = new Blob([workletSource], { type: "text/javascript" });
+  return new URL(URL.createObjectURL(blob));
+}
+
 export function createFeskDecoder(overrides?: unknown): FeskDecoder {
   return _createFeskDecoder({
-    /* @vite-ignore */
-    workletUrl: () => new URL("./mb-fesk-worklet.js", import.meta.url),
+    workletUrl: createWorkletUrl,
     ...(overrides as object),
   });
 }
