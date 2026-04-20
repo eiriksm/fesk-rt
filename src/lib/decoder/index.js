@@ -688,7 +688,10 @@ export function createFeskDecoder(overrides = {}) {
         if (config.autoStopOnFrame && !autoStopTriggered) {
           autoStopTriggered = true;
           queueMicrotask(() => {
-            stop({ status: "auto-stopped" }).catch(() => {});
+            stop({ status: "auto-stopped" }).catch((error) => {
+              autoStopTriggered = false;
+              console.error("Auto-stop failed", error);
+            });
           });
         }
       } else if (!out.crcOk) {
