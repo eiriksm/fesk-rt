@@ -259,6 +259,7 @@ function resolveConfig(overrides = {}) {
     scoreMin,
     scoreMinBank,
     workletUrl: overrides.workletUrl ?? DEFAULT_WORKLET_URL,
+    autoStopOnFrame: Boolean(overrides.autoStopOnFrame),
   };
 }
 
@@ -272,6 +273,7 @@ export function createFeskDecoder(overrides = {}) {
   let mediaSrc = null;
   let bufferSrc = null;
   let suppressReadyStatus = false;
+  let autoStopTriggered = false;
 
   const decoderStates = new Map();
 
@@ -683,6 +685,15 @@ export function createFeskDecoder(overrides = {}) {
         }
         hadFrameOk = true;
         pendingStatus = null;
+        if (config.autoStopOnFrame && !autoStopTriggered) {
+          autoStopTriggered = true;
+          queueMicrotask(() => {
+            stop({ status: "auto-stopped" }).catch((error) => {
+              autoStopTriggered = false;
+              console.error("Auto-stop failed", error);
+            });
+          });
+        }
       } else if (!out.crcOk) {
         emitState({
           kind: "pipeline-status",
@@ -754,6 +765,7 @@ export function createFeskDecoder(overrides = {}) {
 
   async function prepare(options = {}) {
     suppressReadyStatus = Boolean(options?.suppressReadyStatus);
+    autoStopTriggered = false;
     resetAllDecoders();
     pipelineReadyWaiters.clear();
     toneLog.clear();
@@ -955,6 +967,7 @@ export function createFeskDecoder(overrides = {}) {
 
     resetAllDecoders();
     suppressReadyStatus = false;
+    autoStopTriggered = false;
     emitState({ kind: "sample-rate", sampleRate: null });
     if (typeof status === "string") emitState({ kind: "status", status });
   }

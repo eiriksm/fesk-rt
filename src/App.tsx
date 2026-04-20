@@ -398,7 +398,10 @@ export function App() {
 
   // Create decoder with appropriate frequency sets
   const decoderRef = useRef<FeskDecoder>(
-    createFeskDecoder({ freqSets: getFreqSetsForMode(modulationMode) }),
+    createFeskDecoder({
+      freqSets: getFreqSetsForMode(modulationMode),
+      autoStopOnFrame: true,
+    }),
   );
   const [decoder, setDecoder] = useState<FeskDecoder>(decoderRef.current);
   const pipelineDefs = useMemo<PipelineDefinition[]>(
@@ -478,7 +481,10 @@ export function App() {
     }
 
     // Create new decoder with new frequency sets
-    const newDecoder = createFeskDecoder({ freqSets: newFreqSets });
+    const newDecoder = createFeskDecoder({
+      freqSets: newFreqSets,
+      autoStopOnFrame: true,
+    });
     decoderRef.current = newDecoder;
     setDecoder(newDecoder);
 
@@ -747,25 +753,34 @@ export function App() {
     logTones();
   }, [cleanup, isBusy, logTones, runMode, stopRecording]);
 
-  const triggerAutoStop = useCallback(
-    (label: string) => {
-      if (autoStopTriggeredRef.current) return;
-      if (runMode === "idle" || isBusy) return;
-      autoStopTriggeredRef.current = true;
-      console.info(`[${label}] auto stop after CRC OK`);
-      queueMicrotask(() => {
-        void handleStop();
-      });
-    },
-    [handleStop, isBusy, runMode],
-  );
+  const handleAutoStop = useCallback(() => {
+    if (autoStopTriggeredRef.current || isBusy || runMode === "idle") return;
+    autoStopTriggeredRef.current = true;
+    setIsBusy(true);
+    (async () => {
+      try {
+        const result = await stopRecording({ finalize: true });
+        await cleanup(result?.hadError ? undefined : "auto-stopped", {
+          skipRecorderStop: true,
+        });
+      } finally {
+        setIsBusy(false);
+      }
+      logTones();
+    })();
+  }, [cleanup, isBusy, logTones, runMode, stopRecording]);
 
   const handleStateEvent = useCallback(
     (payload: DecoderStateEvent) => {
       if (!payload) return;
       switch (payload.kind) {
         case "status":
-          if (typeof payload.status === "string") setStatus(payload.status);
+          if (typeof payload.status === "string") {
+            setStatus(payload.status);
+            if (payload.status === "auto-stopped") {
+              handleAutoStop();
+            }
+          }
           break;
         case "pipeline-status": {
           const pipelineKey = payload.pipelineKey;
@@ -816,7 +831,7 @@ export function App() {
           break;
       }
     },
-    [handleSamplePlaybackEnded],
+    [handleAutoStop, handleSamplePlaybackEnded],
   );
 
   const previewBase32Decoded = useMemo(
@@ -923,18 +938,13 @@ export function App() {
         console.info(
           `[${label}] frame OK: "${result.text}" (avg confidence ${avgScore})`,
         );
-        const stopAvailable = runMode !== "idle" && !isBusy;
-        if (!autoStopTriggeredRef.current && stopAvailable) {
-          setStatus(`frame OK (${label}) — stopping…`);
-          triggerAutoStop(label);
-        }
       } else if (!result.crcOk) {
         console.warn(`[${label}] frame CRC fail`);
       } else if (!result.ok) {
         console.warn(`[${label}] frame decode fail`);
       }
     },
-    [dispatchCandidates, isBusy, pipelineByKey, runMode, triggerAutoStop],
+    [dispatchCandidates, pipelineByKey],
   );
 
   const handleStart = useCallback(async () => {
