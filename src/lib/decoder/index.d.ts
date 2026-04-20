@@ -98,6 +98,7 @@ export interface FeskDecoderConfig {
   scoreMin: number;
   scoreMinBank: number[];
   workletUrl: string | URL | (() => URL);
+  autoStopOnFrame: boolean;
 }
 
 export interface FeskDecoder {
