@@ -30,10 +30,5 @@ export default defineConfig({
     },
     outDir: "dist-lib",
     emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        preserveModules: false,
-      },
-    },
   },
 });

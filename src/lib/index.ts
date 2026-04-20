@@ -32,10 +32,20 @@ export {
   tryDecodeAsBase32Image,
 } from "./base32.js";
 
-export function createFeskDecoder(overrides?: unknown): FeskDecoder {
-  return _createFeskDecoder({
-    /* @vite-ignore */
-    workletUrl: () => new URL("./mb-fesk-worklet.js", import.meta.url),
-    ...(overrides as object),
-  });
+export interface CreateFeskDecoderOptions {
+  workletUrl: string | URL | (() => URL);
+  [key: string]: unknown;
+}
+
+export function createFeskDecoder(
+  options: CreateFeskDecoderOptions,
+): FeskDecoder {
+  if (!options || options.workletUrl == null) {
+    throw new Error(
+      "createFeskDecoder: `workletUrl` is required. Copy " +
+        "`mb-fesk-worklet.js` from the package into a location served by " +
+        "your app and pass its URL (string, URL, or `() => URL`).",
+    );
+  }
+  return _createFeskDecoder(options);
 }
