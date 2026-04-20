@@ -8,8 +8,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "strict": false,
-    "baseUrl": ".",
-    "types": ["vite/client"]
+    "baseUrl": "."
   },
   "include": ["src"]
 }

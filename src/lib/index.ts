@@ -1,6 +1,5 @@
 import { createFeskDecoder as _createFeskDecoder } from "./decoder/index.js";
 import type { FeskDecoder } from "./decoder/index.js";
-import workletSource from "../../public/mb-fesk-worklet.js?raw";
 
 export {
   DEFAULT_FESK_DECODER_CONFIG,
@@ -33,14 +32,20 @@ export {
   tryDecodeAsBase32Image,
 } from "./base32.js";
 
-function createWorkletUrl(): URL {
-  const blob = new Blob([workletSource], { type: "text/javascript" });
-  return new URL(URL.createObjectURL(blob));
+export interface CreateFeskDecoderOptions {
+  workletUrl: string | URL | (() => URL);
+  [key: string]: unknown;
 }
 
-export function createFeskDecoder(overrides?: unknown): FeskDecoder {
-  return _createFeskDecoder({
-    workletUrl: createWorkletUrl,
-    ...(overrides as object),
-  });
+export function createFeskDecoder(
+  options: CreateFeskDecoderOptions,
+): FeskDecoder {
+  if (!options || options.workletUrl == null) {
+    throw new Error(
+      "createFeskDecoder: `workletUrl` is required. Copy " +
+        "`mb-fesk-worklet.js` from the package into a location served by " +
+        "your app and pass its URL (string, URL, or `() => URL`).",
+    );
+  }
+  return _createFeskDecoder(options);
 }
