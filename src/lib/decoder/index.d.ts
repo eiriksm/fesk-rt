@@ -101,6 +101,24 @@ export interface FeskDecoderConfig {
   autoStopOnFrame: boolean;
 }
 
+export interface StartMicrophoneOptions {
+  /**
+   * Audio constraints passed to `getUserMedia`. Defaults to
+   * `RECOMMENDED_MIC_CONSTRAINTS`, which disables echo/noise/gain
+   * processing and forces a mono track — the settings validated to
+   * give the best decoding results. Pass `true` to use the browser
+   * defaults, or a `MediaTrackConstraints` object to fully override.
+   */
+  audio?: boolean | MediaTrackConstraints;
+  sampleRate?: number;
+  suppressReadyStatus?: boolean;
+}
+
+export interface StartMicrophoneResult {
+  stream: MediaStream;
+  source: MediaStreamAudioSourceNode;
+}
+
 export interface FeskDecoder {
   config: FeskDecoderConfig;
   events: DecoderEventEmitter;
@@ -109,6 +127,9 @@ export interface FeskDecoder {
     sampleRate?: number;
   }): Promise<void>;
   waitForReady(): Promise<void>;
+  startMicrophone(
+    options?: StartMicrophoneOptions,
+  ): Promise<StartMicrophoneResult>;
   attachStream(stream: MediaStream): Promise<MediaStreamAudioSourceNode>;
   attachBuffer(
     buffer: AudioBuffer,
@@ -126,3 +147,4 @@ export declare const DEFAULT_FESK_DECODER_CONFIG: FeskDecoderConfig;
 export declare const FREQS_SETS_4FSK: number[][];
 export declare const BFSK_FREQS_SETS: number[][];
 export declare const HYBRID_FREQS_SETS: number[][];
+export declare const RECOMMENDED_MIC_CONSTRAINTS: MediaTrackConstraints;

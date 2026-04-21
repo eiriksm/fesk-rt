@@ -6,6 +6,7 @@ export {
   FREQS_SETS_4FSK,
   BFSK_FREQS_SETS,
   HYBRID_FREQS_SETS,
+  RECOMMENDED_MIC_CONSTRAINTS,
 } from "./decoder/index.js";
 
 export type {
@@ -23,6 +24,8 @@ export type {
   DecoderEventEmitter,
   FeskDecoderConfig,
   FeskDecoder,
+  StartMicrophoneOptions,
+  StartMicrophoneResult,
 } from "./decoder/index.js";
 
 export {

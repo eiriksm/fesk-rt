@@ -16,14 +16,14 @@ export const FREQS_SETS_4FSK = [
 
 // BFSK frequency sets (from main branch - original BFSK frequencies)
 export const BFSK_FREQS_SETS = [
-  [2490.2, 3134.8],  // Bank A - BFSK
-  [7394.0, 9313.0],  // Bank B - BFSK
+  [2490.2, 3134.8], // Bank A - BFSK
+  [7394.0, 9313.0], // Bank B - BFSK
 ];
 
 // Hybrid: Both 4FSK and BFSK simultaneously
 export const HYBRID_FREQS_SETS = [
-  ...FREQS_SETS_4FSK,                    // Banks A-B: 4FSK
-  ...BFSK_FREQS_SETS,                    // Banks C-D: BFSK
+  ...FREQS_SETS_4FSK, // Banks A-B: 4FSK
+  ...BFSK_FREQS_SETS, // Banks C-D: BFSK
 ];
 
 // Default: Hybrid mode (both 4FSK and BFSK)
@@ -52,6 +52,22 @@ const DEFAULT_SCORE_MIN_BANK = DEFAULT_FREQS_SETS.map((_, idx) =>
 );
 
 const DEFAULT_WORKLET_URL = "/mb-fesk-worklet.js";
+
+// Audio constraints that have been validated to give the best decoding
+// results: disable all processing that would reshape the signal
+// (echo/noise/gain filters) and force a mono track. The `goog*` aliases
+// are Chrome-specific; standard constraints alone are not always honored
+// on Chrome mobile.
+export const RECOMMENDED_MIC_CONSTRAINTS = Object.freeze({
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false,
+  channelCount: { exact: 1 },
+  googEchoCancellation: false,
+  googNoiseSuppression: false,
+  googAutoGainControl: false,
+  googHighpassFilter: false,
+});
 
 function createEmitter() {
   const handlers = new Map();
@@ -242,14 +258,23 @@ function bitsToByte(bits) {
 
 function resolveConfig(overrides = {}) {
   const freqSets = overrides.freqSets ?? DEFAULT_FREQS_SETS;
-  const detectorConfig = overrides.detectorConfig ?? buildDetectorConfig(freqSets);
-  const gainConfig = { ...DEFAULT_GAIN_CONFIG, ...(overrides.gainConfig || {}) };
+  const detectorConfig =
+    overrides.detectorConfig ?? buildDetectorConfig(freqSets);
+  const gainConfig = {
+    ...DEFAULT_GAIN_CONFIG,
+    ...(overrides.gainConfig || {}),
+  };
   const pipelineDefs =
-    overrides.pipelineDefs ?? buildPipelineDefs(freqSets, { ...overrides.pipelineOptions, ...gainConfig });
+    overrides.pipelineDefs ??
+    buildPipelineDefs(freqSets, {
+      ...overrides.pipelineOptions,
+      ...gainConfig,
+    });
   const scoreMin = overrides.scoreMin ?? DEFAULT_SCORE_MIN;
   const scoreMinBank = overrides.scoreMinBank ?? DEFAULT_SCORE_MIN_BANK;
   const pipelineThresholds =
-    overrides.pipelineThresholds ?? buildPipelineThresholds(pipelineDefs, scoreMinBank, scoreMin);
+    overrides.pipelineThresholds ??
+    buildPipelineThresholds(pipelineDefs, scoreMinBank, scoreMin);
   return {
     freqSets,
     detectorConfig,
@@ -272,6 +297,7 @@ export function createFeskDecoder(overrides = {}) {
   let audioCtx = null;
   let mediaSrc = null;
   let bufferSrc = null;
+  let ownedStream = null;
   let suppressReadyStatus = false;
   let autoStopTriggered = false;
 
@@ -316,7 +342,8 @@ export function createFeskDecoder(overrides = {}) {
 
   function updatePreview(dec) {
     if (!dec.frameBits.length) return null;
-    const usableBits = dec.frameBits.length - (dec.frameBits.length % CODE_BITS);
+    const usableBits =
+      dec.frameBits.length - (dec.frameBits.length % CODE_BITS);
     if (!usableBits || usableBits <= dec.previewConsumedBits) return null;
     const codes = bitsToCodes(dec.frameBits, usableBits);
     const res = decodeCodes(codes);
@@ -568,8 +595,8 @@ export function createFeskDecoder(overrides = {}) {
     } else {
       // 4FSK: symbol index 0-3 encodes 2 bits
       if (symIdx < 0 || symIdx > 3) return null;
-      const bit0 = (symIdx >> 1) & 1;  // MSB
-      const bit1 = symIdx & 1;          // LSB
+      const bit0 = (symIdx >> 1) & 1; // MSB
+      const bit1 = symIdx & 1; // LSB
       // Feed both bits in sequence
       const result0 = feedBit(dec, bit0, score);
       if (result0) return result0;
@@ -602,7 +629,8 @@ export function createFeskDecoder(overrides = {}) {
   function connectNodeToPipelines(node, type) {
     for (const state of pipelineStates.values()) {
       try {
-        const target = type === "sample" ? state.sampleGainNode : state.micGainNode;
+        const target =
+          type === "sample" ? state.sampleGainNode : state.micGainNode;
         node.connect(target);
       } catch (err) {
         console.warn(
@@ -616,7 +644,8 @@ export function createFeskDecoder(overrides = {}) {
   function disconnectNodeFromPipelines(node, type) {
     for (const state of pipelineStates.values()) {
       try {
-        const target = type === "sample" ? state.sampleGainNode : state.micGainNode;
+        const target =
+          type === "sample" ? state.sampleGainNode : state.micGainNode;
         node.disconnect(target);
       } catch {}
     }
@@ -628,13 +657,18 @@ export function createFeskDecoder(overrides = {}) {
 
   function handlePipelineCandidates(def, results) {
     const freqSets = config.freqSets;
-    const threshold = config.pipelineThresholds.get(def.key) ?? DEFAULT_SCORE_MIN;
+    const threshold =
+      config.pipelineThresholds.get(def.key) ?? DEFAULT_SCORE_MIN;
     const dec = decoderStates.get(def.key);
     if (!dec) return;
 
     if (!Array.isArray(results) || !results.length) {
       emitState({ kind: "freq", pipelineKey: def.key, freqHz: null });
-      emitState({ kind: "pipeline-status", pipelineKey: def.key, status: "idle" });
+      emitState({
+        kind: "pipeline-status",
+        pipelineKey: def.key,
+        status: "idle",
+      });
       return;
     }
 
@@ -665,7 +699,9 @@ export function createFeskDecoder(overrides = {}) {
       emitState({ kind: "freq", pipelineKey: def.key, freqHz: displayFreq });
 
       if ((r.score ?? 0) < threshold) continue;
-      const out = Number.isFinite(r.idx) ? feedOne(dec, r.idx, r.score, def.modulationType) : null;
+      const out = Number.isFinite(r.idx)
+        ? feedOne(dec, r.idx, r.score, def.modulationType)
+        : null;
       if (!out) continue;
 
       events.emit("frame", {
@@ -775,14 +811,22 @@ export function createFeskDecoder(overrides = {}) {
     const audioCtxOptions = { latencyHint: "interactive" };
     if (sampleRate) {
       audioCtxOptions.sampleRate = sampleRate;
-      console.info(`Creating AudioContext with requested sample rate: ${sampleRate} Hz`);
+      console.info(
+        `Creating AudioContext with requested sample rate: ${sampleRate} Hz`,
+      );
     } else {
       console.info("Creating AudioContext with browser default sample rate");
     }
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)(audioCtxOptions);
-    console.info(`AudioContext created - actual sample rate: ${audioCtx.sampleRate} Hz`);
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)(
+      audioCtxOptions,
+    );
+    console.info(
+      `AudioContext created - actual sample rate: ${audioCtx.sampleRate} Hz`,
+    );
     if (sampleRate && sampleRate !== audioCtx.sampleRate) {
-      console.warn(`AudioContext sample rate mismatch! Requested ${sampleRate} Hz but got ${audioCtx.sampleRate} Hz`);
+      console.warn(
+        `AudioContext sample rate mismatch! Requested ${sampleRate} Hz but got ${audioCtx.sampleRate} Hz`,
+      );
     }
     emitState({ kind: "sample-rate", sampleRate: audioCtx.sampleRate });
 
@@ -809,9 +853,12 @@ export function createFeskDecoder(overrides = {}) {
       sampleGainNode.channelCount = 1;
       sampleGainNode.channelCountMode = "explicit";
       sampleGainNode.channelInterpretation = "speakers";
-      micGainNode.gain.value = Number.isFinite(def.micGain) && def.micGain > 0 ? def.micGain : 1;
+      micGainNode.gain.value =
+        Number.isFinite(def.micGain) && def.micGain > 0 ? def.micGain : 1;
       sampleGainNode.gain.value =
-        Number.isFinite(def.sampleGain) && def.sampleGain > 0 ? def.sampleGain : 1;
+        Number.isFinite(def.sampleGain) && def.sampleGain > 0
+          ? def.sampleGain
+          : 1;
       micGainNode.connect(workletNode);
       sampleGainNode.connect(workletNode);
       const state = {
@@ -844,6 +891,44 @@ export function createFeskDecoder(overrides = {}) {
     }
   }
 
+  async function startMicrophone(options = {}) {
+    const { audio, sampleRate, suppressReadyStatus: suppress } = options;
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      throw new Error(
+        "startMicrophone: navigator.mediaDevices.getUserMedia is unavailable in this environment",
+      );
+    }
+    const audioConstraints =
+      audio === undefined ? RECOMMENDED_MIC_CONSTRAINTS : audio;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: audioConstraints,
+    });
+    ownedStream = stream;
+    try {
+      if (!audioCtx) {
+        const prepareOptions = {};
+        if (sampleRate !== undefined) prepareOptions.sampleRate = sampleRate;
+        if (suppress !== undefined)
+          prepareOptions.suppressReadyStatus = suppress;
+        await prepare(prepareOptions);
+        await waitForPipelinesReady();
+      }
+      const source = await attachStream(stream);
+      return { stream, source };
+    } catch (err) {
+      stream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+      if (ownedStream === stream) ownedStream = null;
+      throw err;
+    }
+  }
+
   async function attachStream(stream) {
     if (!audioCtx) {
       await prepare();
@@ -855,11 +940,15 @@ export function createFeskDecoder(overrides = {}) {
         mediaSrc.disconnect();
       } catch {}
     }
-    console.info(`Creating MediaStreamSource - AudioContext sample rate: ${audioCtx.sampleRate} Hz`);
+    console.info(
+      `Creating MediaStreamSource - AudioContext sample rate: ${audioCtx.sampleRate} Hz`,
+    );
     const audioTracks = stream.getAudioTracks();
     if (audioTracks.length > 0) {
       const trackSettings = audioTracks[0].getSettings();
-      console.info(`Stream audio track sample rate: ${trackSettings.sampleRate} Hz`);
+      console.info(
+        `Stream audio track sample rate: ${trackSettings.sampleRate} Hz`,
+      );
     }
     mediaSrc = audioCtx.createMediaStreamSource(stream);
     // Force mono output for Chrome mobile compatibility
@@ -943,6 +1032,15 @@ export function createFeskDecoder(overrides = {}) {
       mediaSrc = null;
     }
 
+    if (ownedStream) {
+      ownedStream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+      ownedStream = null;
+    }
+
     for (const state of pipelineStates.values()) {
       state.ready = false;
       try {
@@ -985,6 +1083,7 @@ export function createFeskDecoder(overrides = {}) {
     config,
     events,
     prepare,
+    startMicrophone,
     attachStream,
     attachBuffer,
     waitForReady: waitForPipelinesReady,
