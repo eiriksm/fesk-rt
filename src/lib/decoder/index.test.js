@@ -159,10 +159,15 @@ describe("decoder internals", () => {
     expect(thresholds.get("bank-1-gain0")).toBeCloseTo(0.25, 5);
   });
 
-  it("exposes autoStopOnFrame opt-in, defaulting to false", () => {
-    expect(DEFAULT_FESK_DECODER_CONFIG.autoStopOnFrame).toBe(false);
-    expect(createFeskDecoder().config.autoStopOnFrame).toBe(false);
-    expect(createFeskDecoder({ autoStopOnFrame: true }).config.autoStopOnFrame).toBe(true);
+  it("exposes autoStopOnFrame opt-out, defaulting to true", () => {
+    expect(DEFAULT_FESK_DECODER_CONFIG.autoStopOnFrame).toBe(true);
+    expect(createFeskDecoder().config.autoStopOnFrame).toBe(true);
+    expect(
+      createFeskDecoder({ autoStopOnFrame: false }).config.autoStopOnFrame,
+    ).toBe(false);
+    expect(
+      createFeskDecoder({ autoStopOnFrame: true }).config.autoStopOnFrame,
+    ).toBe(true);
   });
 
   it("supports 4FSK, BFSK, and hybrid frequency configurations", () => {
