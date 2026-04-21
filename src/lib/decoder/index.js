@@ -259,7 +259,7 @@ function resolveConfig(overrides = {}) {
     scoreMin,
     scoreMinBank,
     workletUrl: overrides.workletUrl ?? DEFAULT_WORKLET_URL,
-    autoStopOnFrame: Boolean(overrides.autoStopOnFrame),
+    autoStopOnFrame: overrides.autoStopOnFrame !== false,
   };
 }
 
