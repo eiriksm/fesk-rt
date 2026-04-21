@@ -906,6 +906,13 @@ export function createFeskDecoder(overrides = {}) {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: audioConstraints,
     });
+    if (ownedStream && ownedStream !== stream) {
+      ownedStream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+    }
     ownedStream = stream;
     try {
       if (!audioCtx) {
