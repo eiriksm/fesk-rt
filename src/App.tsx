@@ -400,7 +400,6 @@ export function App() {
   const decoderRef = useRef<FeskDecoder>(
     createFeskDecoder({
       freqSets: getFreqSetsForMode(modulationMode),
-      autoStopOnFrame: true,
     }),
   );
   const [decoder, setDecoder] = useState<FeskDecoder>(decoderRef.current);
@@ -483,7 +482,6 @@ export function App() {
     // Create new decoder with new frequency sets
     const newDecoder = createFeskDecoder({
       freqSets: newFreqSets,
-      autoStopOnFrame: true,
     });
     decoderRef.current = newDecoder;
     setDecoder(newDecoder);
