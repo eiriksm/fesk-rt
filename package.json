@@ -4,7 +4,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/eiriksm/fesk-rt"
+    "url": "git+https://github.com/eiriksm/fesk-rt.git"
   },
   "exports": {
     ".": {
