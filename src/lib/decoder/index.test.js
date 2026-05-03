@@ -34,8 +34,8 @@ describe("decoder internals", () => {
     expect(config.freqSets).toEqual([
       [2349.32, 2637.02, 2959.96, 3322.44], // Bank A - 4FSK
       [2349.32, 2637.02, 2959.96, 3322.44], // Bank B - 4FSK
-      [2490.2, 3134.8],                     // Bank C - BFSK
-      [7394.0, 9313.0],                     // Bank D - BFSK
+      [2490.2, 3134.8], // Bank C - BFSK
+      [7394.0, 9313.0], // Bank D - BFSK
     ]);
 
     expect(config.detectorConfig).toHaveLength(4);
@@ -71,7 +71,9 @@ describe("decoder internals", () => {
     expect(config.scoreMinBank).toEqual([0.28, 0.18, 0.18, 0.18]);
 
     // Check 4FSK banks
-    const gain0_4fsk = config.pipelineDefs.find((def) => def.key === "bank-0-gain0");
+    const gain0_4fsk = config.pipelineDefs.find(
+      (def) => def.key === "bank-0-gain0",
+    );
     expect(gain0_4fsk).toMatchObject({
       label: "Bank A (4FSK)",
       modulationType: "4FSK",
@@ -80,7 +82,9 @@ describe("decoder internals", () => {
     });
 
     // Check BFSK banks
-    const gain0_bfsk = config.pipelineDefs.find((def) => def.key === "bank-2-gain0");
+    const gain0_bfsk = config.pipelineDefs.find(
+      (def) => def.key === "bank-2-gain0",
+    );
     expect(gain0_bfsk).toMatchObject({
       label: "Bank C (BFSK)",
       modulationType: "BFSK",
