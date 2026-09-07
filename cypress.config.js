@@ -20,6 +20,17 @@ export default defineConfig({
         return launchOptions
       })
 
+      // None of these are sensitive, so expose them to the browser-side spec
+      // code instead of leaving them in config.env (which Cypress 16+ no
+      // longer surfaces via Cypress.env() in the browser).
+      config.expose = {
+        ...config.expose,
+        recordDurationMs: config.env.recordDurationMs,
+        decodeBufferMs: config.env.decodeBufferMs,
+        expectedText: config.env.expectedText,
+        modulation: config.env.modulation,
+      }
+
       return config
     },
     defaultCommandTimeout: 30000,
